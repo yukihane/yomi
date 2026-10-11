@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import { ApiError } from "@/domain/api-error";
 import { decodeCompleteBatch, encodeBatch } from "@/domain/batch-protocol";
 import { TranslateFailure } from "@/domain/failure";
@@ -5,6 +7,8 @@ import type { MessageCaller } from "@/domain/message-caller";
 import type { ModelInfo } from "@/domain/models";
 import { pageInstructions, selectionInstructions } from "@/domain/prompts";
 import { cacheKey } from "@/domain/translation-cache";
+import { MAX_OUTPUT_LENGTH } from "@/domain/translation-limits";
+import { TranslateRequestSchema } from "@/domain/translation-request";
 import type { TranslationOutput } from "@/domain/translation-request";
 import { currentDocument } from "@/infra/browser/current-document";
 import type { TranslateRequest } from "@/infra/messaging/protocol";
@@ -24,6 +28,7 @@ export async function translate(
 	onOutput: (event: TranslationOutput) => void,
 	caller: MessageCaller,
 ): Promise<void> {
+	v.parse(TranslateRequestSchema, req);
 	if (caller.kind !== "content")
 		throw new TranslateFailure("other", "この画面から翻訳できません。");
 	const source = await currentDocument(caller);
@@ -36,9 +41,11 @@ export async function translate(
 			: selectionInstructions(req.targetLang);
 	const stream = async (input: string, onDelta: (text: string) => void) => {
 		let received = false;
+		let outputLength = 0;
 		await withAuthRetry(
-			(token) =>
-				streamResponse({
+			(token) => {
+				signal.throwIfAborted();
+				return streamResponse({
 					token,
 					model,
 					reasoningEffort,
@@ -47,10 +54,15 @@ export async function translate(
 					input,
 					signal,
 					onDelta: (text) => {
+						signal.throwIfAborted();
+						outputLength += text.length;
+						if (outputLength > MAX_OUTPUT_LENGTH)
+							throw new TranslateFailure("other", "翻訳結果が上限を超えたため中断しました。");
 						received = true;
 						onDelta(text);
 					},
-				}),
+				});
+			},
 			// 訳文の一部を返した後に再試行すると、呼び出し側に同じ訳文が重複して届く
 			() => !received,
 		);

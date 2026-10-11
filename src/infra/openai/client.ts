@@ -4,12 +4,15 @@ import { ApiError } from "@/domain/api-error";
 import type { ModelInfo } from "@/domain/models";
 import type { ReasoningEffort } from "@/domain/settings";
 
+import { limitedFetch } from "./limited-fetch";
 import { FAST_SERVICE_TIER, toModelInfos } from "./models";
 import type { SiwcModel } from "./models";
 
 function createClient(token: string): OpenAI {
 	return new OpenAI({
 		apiKey: token,
+		fetch: limitedFetch,
+		timeout: 120_000,
 		// 拡張の service worker はブラウザ環境と判定される。キーはユーザー本人の OAuth トークンで、第三者には渡らない
 		dangerouslyAllowBrowser: true,
 		// 再試行は refresh を挟む呼び出し側で制御する
