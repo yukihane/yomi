@@ -26,7 +26,10 @@ beforeAll(async () => {
 
 	await ext.sendToTab({ type: "page:translate" });
 	await page.waitForFunction(() => document.querySelector("#li2")?.textContent.includes("JA:"));
-	await page.waitForTimeout(300);
+	await expect.poll(async () => {
+		const state = await ext.sendToTab<{ busy: number }>({ type: "page:getState" });
+		return state.busy;
+	}).toBe(0);
 	await screenshot(page, "page-translated");
 });
 
