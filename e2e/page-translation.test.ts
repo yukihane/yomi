@@ -1,5 +1,5 @@
 import type { Page } from "playwright-core";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 
 import { launchExtension, screenshot, takesScreenshots } from "./fixtures";
 import type { Extension } from "./fixtures";
@@ -26,10 +26,11 @@ beforeAll(async () => {
 
 	await ext.sendToTab({ type: "page:translate" });
 	await page.waitForFunction(() => document.querySelector("#li2")?.textContent.includes("JA:"));
-	await expect.poll(async () => {
-		const state = await ext.sendToTab<{ busy: number }>({ type: "page:getState" });
-		return state.busy;
-	}).toBe(0);
+	// expect.poll は beforeAll 内で使えない。
+	await vi.waitFor(async () => {
+			const state = await ext.sendToTab<{ busy: number }>({ type: "page:getState" });
+			expect(state.busy).toBe(0);
+		}, { timeout: 10000 });
 	await screenshot(page, "page-translated");
 });
 
