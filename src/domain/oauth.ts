@@ -51,14 +51,21 @@ export function isRedirectUrl(url: string): boolean {
 		return false;
 	}
 	const expected = new URL(REDIRECT_URI);
-	return callback.origin === expected.origin && callback.pathname === expected.pathname && callback.username === "" && callback.password === "" && callback.hash === "";
+	return (
+		callback.origin === expected.origin &&
+		callback.pathname === expected.pathname &&
+		callback.username === "" &&
+		callback.password === "" &&
+		callback.hash === ""
+	);
 }
 
 export function parseAuthorizationCallback(
 	callback: URL,
 	expected: { state: string; clientId: string | null },
 ): { code: string; clientId: string } {
-	if (!isRedirectUrl(callback.href)) throw new Error("認可レスポンスのリダイレクト先が一致しません");
+	if (!isRedirectUrl(callback.href))
+		throw new Error("認可レスポンスのリダイレクト先が一致しません");
 	const params = callback.searchParams;
 	if (params.get("state") !== expected.state) {
 		throw new Error("認可レスポンスの state が一致しません");

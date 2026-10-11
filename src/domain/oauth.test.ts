@@ -23,9 +23,12 @@ const request: AuthorizeRequest = {
 };
 
 describe("isRedirectUrl", () => {
-	it.each([REDIRECT_URI, `${REDIRECT_URI}?state=s&code=c`, `${REDIRECT_URI}?error=access_denied`])("正規の callback %s を受け付ける", (url) => {
-		expect(isRedirectUrl(url)).toBe(true);
-	});
+	it.each([REDIRECT_URI, `${REDIRECT_URI}?state=s&code=c`, `${REDIRECT_URI}?error=access_denied`])(
+		"正規の callback %s を受け付ける",
+		(url) => {
+			expect(isRedirectUrl(url)).toBe(true);
+		},
+	);
 
 	it.each([
 		`${REDIRECT_URI}-extra?state=s&code=c`,
@@ -76,7 +79,12 @@ describe("parseAuthorizationCallback", () => {
 	const callback = (query: string) => new URL(`${REDIRECT_URI}?${query}`);
 
 	it("state が一致していても別のパスの callback は拒否する", () => {
-		expect(() => parseAuthorizationCallback(new URL(`${REDIRECT_URI}-extra?state=s&code=c`), { state: "s", clientId: "old" })).toThrow("リダイレクト先");
+		expect(() =>
+			parseAuthorizationCallback(new URL(`${REDIRECT_URI}-extra?state=s&code=c`), {
+				state: "s",
+				clientId: "old",
+			}),
+		).toThrow("リダイレクト先");
 	});
 
 	it("code と発行された client_id を取り出す", () => {
