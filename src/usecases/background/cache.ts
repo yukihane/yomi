@@ -34,7 +34,7 @@ export async function cacheSession(signal: AbortSignal, incognito: boolean) {
 	if (paused > 0)
 		throw new TranslateFailure(
 			"translation_stopped",
-			"認証状態を変更しています。完了後に再度翻訳してください。",
+			"保存設定または認証状態を変更しています。完了後に再度翻訳してください。",
 		);
 	const current = barrier;
 	const combined = AbortSignal.any([signal, current.signal]);
