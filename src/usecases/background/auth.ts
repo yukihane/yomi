@@ -17,15 +17,18 @@ import type { AuthState } from "@/infra/messaging/protocol";
 import { postToken, revokeRefreshToken } from "@/infra/oauth/token-endpoint";
 import { clientIdItem, credentialsItem, hostIdItem, signInItem } from "@/infra/storage/auth";
 import type { Credentials, PendingSignIn } from "@/infra/storage/auth";
+import { protectAuthStorage } from "@/infra/storage/auth-access";
 
 const REFRESH_MARGIN_MS = 60 * 1000;
 
 export async function getAuthState(): Promise<AuthState> {
+	await protectAuthStorage();
 	const creds = await credentialsItem.getValue();
 	return { signedIn: creds != null, email: creds?.email ?? null };
 }
 
 export async function startSignIn(): Promise<void> {
+	await protectAuthStorage();
 	const current = await signInItem.getValue();
 	if (current?.status === "pending") {
 		const exists = await browser.tabs.get(current.tabId).then(
@@ -70,6 +73,7 @@ export async function startSignIn(): Promise<void> {
 
 export async function handleTabUpdated(tabId: number, url: string | undefined): Promise<boolean> {
 	if (url == null || !isRedirectUrl(url)) return false;
+	await protectAuthStorage();
 	const pending = await signInItem.getValue();
 	if (pending?.status !== "pending" || pending.tabId !== tabId) return false;
 	await browser.tabs.remove(tabId);
@@ -87,6 +91,7 @@ export async function handleTabUpdated(tabId: number, url: string | undefined): 
 }
 
 export async function handleTabRemoved(tabId: number): Promise<void> {
+	await protectAuthStorage();
 	const pending = await signInItem.getValue();
 	if (pending?.status === "pending" && pending.tabId === tabId) await signInItem.setValue(null);
 }
@@ -128,6 +133,7 @@ let credentialsGeneration = 0;
 let refreshPromise: Promise<Credentials> | null = null;
 
 export async function getAccessToken(forceRefresh = false): Promise<string> {
+	await protectAuthStorage();
 	const creds = await credentialsItem.getValue();
 	if (!creds)
 		throw new TranslateFailure("signed_out", "翻訳するには ChatGPT でサインインしてください。");
@@ -177,6 +183,7 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 }
 
 export async function signOut(): Promise<void> {
+	await protectAuthStorage();
 	credentialsGeneration++;
 	// 進行中の refresh が新しい refresh token を受け取っていれば、そちらを revoke する
 	await refreshPromise?.catch(() => {});
