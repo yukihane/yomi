@@ -13,6 +13,7 @@ import {
 	TokenEndpointError,
 } from "@/domain/oauth";
 import type { TokenResponse } from "@/domain/oauth";
+import type { SignOutResult } from "@/domain/sign-out";
 import type { AuthState } from "@/infra/messaging/protocol";
 import { postToken, revokeRefreshToken } from "@/infra/oauth/token-endpoint";
 import { clientIdItem, credentialsItem, hostIdItem, signInItem } from "@/infra/storage/auth";
@@ -176,17 +177,18 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 	return next;
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(): Promise<SignOutResult> {
 	credentialsGeneration++;
 	// 進行中の refresh が新しい refresh token を受け取っていれば、そちらを revoke する
 	await refreshPromise?.catch(() => {});
 	const creds = await credentialsItem.getValue();
 	await credentialsItem.setValue(null);
-	if (!creds) return;
+	if (!creds) return { localCleared: true, remote: "not_needed" };
 	try {
 		await revokeRefreshToken(creds.refreshToken, creds.clientId);
+		return { localCleared: true, remote: "revoked" };
 	} catch {
-		// ローカルの資格情報は既に消しているので、revocation の失敗でサインアウトを妨げない
+		return { localCleared: true, remote: "failed" };
 	}
 }
 

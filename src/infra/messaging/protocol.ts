@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { SerializedFailureSchema } from "@/domain/failure";
 import { ModelInfoSchema } from "@/domain/models";
+import { SignOutResultSchema } from "@/domain/sign-out";
 import { CachedTranslationSchema } from "@/domain/translation-cache";
 
 export const TRANSLATE_PORT = "translate";
@@ -36,7 +37,7 @@ const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(params: 
 export const BACKGROUND_API = {
 	"auth:getState": endpoint(v.void(), AuthStateSchema),
 	"auth:signIn": endpoint(v.void(), v.void()),
-	"auth:signOut": endpoint(v.void(), v.void()),
+	"auth:signOut": endpoint(v.void(), SignOutResultSchema),
 	"models:list": endpoint(v.void(), v.array(ModelInfoSchema)),
 	"open:options": endpoint(v.void(), v.void()),
 	"open:usage": endpoint(v.void(), v.void()),
