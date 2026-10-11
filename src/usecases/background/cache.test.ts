@@ -1,13 +1,18 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 
+import { stopAllPageTranslations } from "@/infra/messaging/content-client";
 import { cachePolicyItem } from "@/infra/storage/cache-policy";
 
 const db = vi.hoisted(() => ({ rotateCache: vi.fn(), countTranslations: vi.fn() }));
 vi.mock("@/infra/storage/translation-cache", () => db);
+vi.mock("@/infra/messaging/content-client", () => ({
+	stopAllPageTranslations: vi.fn(async () => {}),
+}));
 vi.mock("@/infra/storage/auth-access", () => ({ protectAuthStorage: vi.fn(async () => {}) }));
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.mocked(stopAllPageTranslations).mockReset().mockResolvedValue();
 	vi.resetModules();
 	db.rotateCache.mockReset().mockResolvedValue("new");
 	db.countTranslations.mockReset().mockResolvedValue(0);
@@ -56,5 +61,30 @@ it("認証変更中の翻訳を受け付けない", async () => {
 	const resume = cache.pauseTranslations();
 	await expect(cache.cacheSession(new AbortController().signal, false)).rejects.toThrow("認証状態");
 	resume();
+	await expect(cache.cacheSession(new AbortController().signal, false)).resolves.toBeDefined();
+});
+
+it("全ページの停止通知を待つ間は新規翻訳とDB消去を開始しない", async () => {
+	const cache = await import("./cache");
+	await cache.enableCache();
+	db.rotateCache.mockClear();
+	const gate = Promise.withResolvers<void>();
+	vi.mocked(stopAllPageTranslations).mockReturnValueOnce(gate.promise);
+	const clearing = cache.clearCache();
+	await expect(cache.cacheSession(new AbortController().signal, false)).rejects.toMatchObject({
+		kind: "translation_stopped",
+	});
+	expect(db.rotateCache).not.toHaveBeenCalled();
+	gate.resolve();
+	await clearing;
+	expect(db.rotateCache).toHaveBeenCalledWith(true);
+	await expect(cache.cacheSession(new AbortController().signal, false)).resolves.toBeDefined();
+});
+it("停止通知の列挙が失敗しても一時停止を解除し再試行できる", async () => {
+	const cache = await import("./cache");
+	await cache.enableCache();
+	vi.mocked(stopAllPageTranslations).mockRejectedValueOnce(new Error("タブ取得失敗"));
+	await expect(cache.clearCache()).rejects.toThrow("タブ取得失敗");
+	await cache.clearCache();
 	await expect(cache.cacheSession(new AbortController().signal, false)).resolves.toBeDefined();
 });

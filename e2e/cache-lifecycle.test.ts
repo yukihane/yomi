@@ -1,3 +1,4 @@
+import type { Page } from "playwright-core";
 import { expect, test } from "vitest";
 import type { Browser } from "wxt/browser";
 
@@ -203,6 +204,67 @@ test("キャッシュ消去で待機バッチとDOM監視を停止し、明示�
 		expect(
 			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
 		).toMatchObject({ ok: true, value: { count: 201 } });
+	} finally {
+		await ext.context.close();
+	}
+});
+
+test("通信完了後の複数ページも消去時に停止し、DOM追加を明示的な再開まで翻訳しない", async () => {
+	const ext = await launchExtension();
+	try {
+		await enableCache(ext);
+		const options = await ext.context.newPage();
+		await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
+		const pages: Page[] = [];
+		for (let i = 0; i < 2; i++) {
+			const page = await ext.openTestPage(`https://test.example/idle-${i}`);
+			pages.push(page);
+			await page.bringToFront();
+			await ext.sendToTab({ type: "page:translate" });
+			await expect.poll(() => page.textContent("#far")).toContain("JA:");
+			await expect
+				.poll(() => ext.sendToTab({ type: "page:getState" }))
+				.toMatchObject({ active: true, busy: 0 });
+		}
+		const count = (await ext.requests()).length;
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:clear" })),
+		).toMatchObject({ ok: true });
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+		).toMatchObject({ ok: true, value: { count: 0 } });
+		for (const page of pages) {
+			await page.bringToFront();
+			expect(await ext.sendToTab({ type: "page:getState" })).toMatchObject({
+				active: false,
+				busy: 0,
+			});
+			await page.evaluate(async () => {
+				const p = document.createElement("p");
+				p.id = "idle-added";
+				p.textContent = "Added while translation is stopped.";
+				document.body.append(p);
+				await new Promise<void>((resolve) => {
+					requestAnimationFrame(() => {
+						requestAnimationFrame(() => resolve());
+					});
+				});
+			});
+			expect(await page.textContent("#idle-added")).toBe("Added while translation is stopped.");
+		}
+		expect((await ext.requests()).length).toBe(count);
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+		).toMatchObject({ ok: true, value: { count: 0 } });
+		await ext.sendToTab({ type: "page:translate" });
+		await expect.poll(() => pages[1]!.textContent("#idle-added")).toContain("JA:");
+		await expect
+			.poll(() => ext.sendToTab({ type: "page:getState" }))
+			.toMatchObject({ active: true, busy: 0 });
+		expect(await pages[0]!.textContent("#idle-added")).toBe("Added while translation is stopped.");
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+		).toMatchObject({ ok: true, value: { count: 1 } });
 	} finally {
 		await ext.context.close();
 	}

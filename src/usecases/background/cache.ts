@@ -1,4 +1,5 @@
 import { TranslateFailure } from "@/domain/failure";
+import { stopAllPageTranslations } from "@/infra/messaging/content-client";
 import { protectAuthStorage } from "@/infra/storage/auth-access";
 import { cachePolicyItem } from "@/infra/storage/cache-policy";
 import { countTranslations, rotateCache } from "@/infra/storage/translation-cache";
@@ -48,14 +49,9 @@ export async function cacheSession(signal: AbortSignal, incognito: boolean) {
 	};
 }
 async function changeCache(enabled?: boolean): Promise<void> {
-	barrier.abort(
-		new TranslateFailure(
-			"translation_stopped",
-			"保存設定または認証状態の変更により翻訳を停止しました。再開するには、もう一度翻訳してください。",
-		),
-	);
-	barrier = new AbortController();
+	const resume = pauseTranslations();
 	const operation = async () => {
+		await stopAllPageTranslations();
 		await initializeCache().catch(() => {});
 		await protectAuthStorage();
 		const previous = await cachePolicyItem.getValue();
@@ -67,7 +63,11 @@ async function changeCache(enabled?: boolean): Promise<void> {
 	};
 	const result = operations.then(operation, operation);
 	operations = result;
-	await result;
+	try {
+		await result;
+	} finally {
+		resume();
+	}
 }
 export async function cacheStatus() {
 	await operations;
