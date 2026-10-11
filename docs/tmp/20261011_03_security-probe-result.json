@@ -1,0 +1,138 @@
+{
+  "browser": "153.0.8010.12",
+  "requestsBeforeAction": 0,
+  "contentScriptCanReadRefreshToken": true,
+  "crossOriginCacheLookup": {
+    "ok": true,
+    "value": [
+      "AUDIT_OTHER_PRIVATE_TRANSLATION"
+    ]
+  },
+  "initialRequests": [
+    {
+      "model": "gpt-6-luna",
+      "instructions": "You are a professional translator embedded in a web browser. Translate web page text into natural, fluent Japanese.\n\nInput format: segments written as <seg id=\"N\">...</seg>, separated by newlines. A segment may itself contain line breaks.\nOutput rules:\n- Output every segment exactly once, in the same order and with the same id, as <seg id=\"N\">translation</seg>, separated by newlines. Output nothing else.\n- Keep line breaks inside a segment at the corresponding positions in the translation.\n- Tags like <g3>...</g3> mark links or formatting. Keep each one exactly once and wrap the translated words that correspond to it. Do not invent new tags.\n- Self-closing tags like <x5/> are untranslatable objects (code, images, line breaks). Keep each one exactly once at the appropriate position.\n- Keep URLs, code identifiers, file paths and numbers as they are. Keep the entities &lt; &gt; &amp; as they are.\n- If a segment is already in Japanese or contains nothing to translate, output it unchanged.\n- Segments come from the same page, so keep terminology consistent across them.\n\nPage context (for reference only, do not output it):\n- Title: AUDIT_TITLE\n- Description: AUDIT_DESCRIPTION",
+      "input": [
+        {
+          "role": "user",
+          "content": "<seg id=\"1\">Public <g0>AUDIT_INLINE_HIDDEN</g0></seg>\n<seg id=\"2\">AUDIT_OPACITY_ZERO</seg>\n<seg id=\"3\">AUDIT_VISIBILITY_HIDDEN</seg>\n<seg id=\"4\">AUDIT_VISIBLE</seg>\n<seg id=\"5\">AUDIT_OFFSCREEN</seg>"
+        }
+      ],
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "stream": true
+    }
+  ],
+  "afterMutationRequests": [
+    {
+      "model": "gpt-6-luna",
+      "instructions": "You are a professional translator embedded in a web browser. Translate web page text into natural, fluent Japanese.\n\nInput format: segments written as <seg id=\"N\">...</seg>, separated by newlines. A segment may itself contain line breaks.\nOutput rules:\n- Output every segment exactly once, in the same order and with the same id, as <seg id=\"N\">translation</seg>, separated by newlines. Output nothing else.\n- Keep line breaks inside a segment at the corresponding positions in the translation.\n- Tags like <g3>...</g3> mark links or formatting. Keep each one exactly once and wrap the translated words that correspond to it. Do not invent new tags.\n- Self-closing tags like <x5/> are untranslatable objects (code, images, line breaks). Keep each one exactly once at the appropriate position.\n- Keep URLs, code identifiers, file paths and numbers as they are. Keep the entities &lt; &gt; &amp; as they are.\n- If a segment is already in Japanese or contains nothing to translate, output it unchanged.\n- Segments come from the same page, so keep terminology consistent across them.\n\nPage context (for reference only, do not output it):\n- Title: AUDIT_TITLE\n- Description: AUDIT_DESCRIPTION",
+      "input": [
+        {
+          "role": "user",
+          "content": "<seg id=\"1\">Public <g0>AUDIT_INLINE_HIDDEN</g0></seg>\n<seg id=\"2\">AUDIT_OPACITY_ZERO</seg>\n<seg id=\"3\">AUDIT_VISIBILITY_HIDDEN</seg>\n<seg id=\"4\">AUDIT_VISIBLE</seg>\n<seg id=\"5\">AUDIT_OFFSCREEN</seg>"
+        }
+      ],
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "stream": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "instructions": "You are a professional translator embedded in a web browser. Translate web page text into natural, fluent Japanese.\n\nInput format: segments written as <seg id=\"N\">...</seg>, separated by newlines. A segment may itself contain line breaks.\nOutput rules:\n- Output every segment exactly once, in the same order and with the same id, as <seg id=\"N\">translation</seg>, separated by newlines. Output nothing else.\n- Keep line breaks inside a segment at the corresponding positions in the translation.\n- Tags like <g3>...</g3> mark links or formatting. Keep each one exactly once and wrap the translated words that correspond to it. Do not invent new tags.\n- Self-closing tags like <x5/> are untranslatable objects (code, images, line breaks). Keep each one exactly once at the appropriate position.\n- Keep URLs, code identifiers, file paths and numbers as they are. Keep the entities &lt; &gt; &amp; as they are.\n- If a segment is already in Japanese or contains nothing to translate, output it unchanged.\n- Segments come from the same page, so keep terminology consistent across them.\n\nPage context (for reference only, do not output it):\n- Title: AUDIT_TITLE\n- Description: AUDIT_DESCRIPTION",
+      "input": [
+        {
+          "role": "user",
+          "content": "<seg id=\"1\">AUDIT_DYNAMIC_EXCLUDED_CHILD</seg>"
+        }
+      ],
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "stream": true
+    }
+  ],
+  "cacheBeforeSignOut": [
+    {
+      "key": "1b10d119ae0b3d7e24a51178ac4eef8ff753f90a430561a1467d75e4cd02de3d",
+      "translation": "AUDIT_OTHER_PRIVATE_TRANSLATION",
+      "usedAt": 1791706144876
+    },
+    {
+      "key": "47968f673800d86ceca35b6432c346ae401ad18683c108f60368ed1688a63f45",
+      "translation": "JA:AUDIT_VISIBLE",
+      "usedAt": 1791706144952
+    },
+    {
+      "key": "9589d811b0a41625a8965109487d33455858daaf59e1fcf00245a84710357d52",
+      "translation": "JA:AUDIT_OFFSCREEN",
+      "usedAt": 1791706144953
+    },
+    {
+      "key": "bb20b0d4d0170dac689d32dc5f637f7477a8c896950a37244071622c894f5711",
+      "translation": "JA:AUDIT_OPACITY_ZERO",
+      "usedAt": 1791706144952
+    },
+    {
+      "key": "bd995490cee6f9b0d8e440ca3300412a413ca6a7c2df5405911f57d5a6d903fd",
+      "translation": "JA:AUDIT_DYNAMIC_EXCLUDED_CHILD",
+      "usedAt": 1791706145385
+    },
+    {
+      "key": "ea34db76fbbcc3515733f6ecf31692818841da6d3f804e0abfcf586b1f6211b9",
+      "translation": "JA:Public <g0>AUDIT_INLINE_HIDDEN</g0>",
+      "usedAt": 1791706144951
+    },
+    {
+      "key": "f48986151712432ffe996e3a5e142fdddce02b4c97018150723ee3445b4739cd",
+      "translation": "JA:AUDIT_VISIBILITY_HIDDEN",
+      "usedAt": 1791706144952
+    }
+  ],
+  "signOut": {
+    "ok": true
+  },
+  "credentialsAfterSignOut": null,
+  "cacheAfterSignOut": [
+    {
+      "key": "1b10d119ae0b3d7e24a51178ac4eef8ff753f90a430561a1467d75e4cd02de3d",
+      "translation": "AUDIT_OTHER_PRIVATE_TRANSLATION",
+      "usedAt": 1791706144876
+    },
+    {
+      "key": "47968f673800d86ceca35b6432c346ae401ad18683c108f60368ed1688a63f45",
+      "translation": "JA:AUDIT_VISIBLE",
+      "usedAt": 1791706144952
+    },
+    {
+      "key": "9589d811b0a41625a8965109487d33455858daaf59e1fcf00245a84710357d52",
+      "translation": "JA:AUDIT_OFFSCREEN",
+      "usedAt": 1791706144953
+    },
+    {
+      "key": "bb20b0d4d0170dac689d32dc5f637f7477a8c896950a37244071622c894f5711",
+      "translation": "JA:AUDIT_OPACITY_ZERO",
+      "usedAt": 1791706144952
+    },
+    {
+      "key": "bd995490cee6f9b0d8e440ca3300412a413ca6a7c2df5405911f57d5a6d903fd",
+      "translation": "JA:AUDIT_DYNAMIC_EXCLUDED_CHILD",
+      "usedAt": 1791706145385
+    },
+    {
+      "key": "ea34db76fbbcc3515733f6ecf31692818841da6d3f804e0abfcf586b1f6211b9",
+      "translation": "JA:Public <g0>AUDIT_INLINE_HIDDEN</g0>",
+      "usedAt": 1791706144951
+    },
+    {
+      "key": "f48986151712432ffe996e3a5e142fdddce02b4c97018150723ee3445b4739cd",
+      "translation": "JA:AUDIT_VISIBILITY_HIDDEN",
+      "usedAt": 1791706144952
+    }
+  ]
+}
