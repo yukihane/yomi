@@ -73,15 +73,18 @@ jobs:
       - name: Setup | Development environment
         uses: $/.github/actions/setup
 
+      - name: Setup | Chromium
+        run: pnpm exec playwright-core install --with-deps --no-shell chromium
+
       - name: Build | Extension
         run: pnpm run build
 
       - name: Run | E2E
         env:
-          CHROMIUM_PATH: /usr/bin/chromium
           E2E_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
         run: |
           mkdir -p "$E2E_SCREENSHOT_DIR"
+          export CHROMIUM_PATH="$(node -p "require('playwright-core').chromium.executablePath()")"
           pnpm run test:e2e
 
       - name: Upload | Screenshots
