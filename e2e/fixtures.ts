@@ -10,6 +10,7 @@ import type { Browser } from "wxt/browser";
 declare const chrome: typeof Browser;
 
 export type ResponsesRequest = {
+	instructions: string;
 	store: boolean;
 	stream: boolean;
 	reasoning?: { effort: string };
