@@ -4,19 +4,15 @@ import { SerializedFailureSchema } from "@/domain/failure";
 import type { MessageAudience } from "@/domain/message-caller";
 import { ModelInfoSchema } from "@/domain/models";
 import { SignOutResultSchema } from "@/domain/sign-out";
-import { CachedTranslationSchema } from "@/domain/translation-cache";
+import { TranslationOutputSchema } from "@/domain/translation-request";
+
+export { TranslateRequestSchema } from "@/domain/translation-request";
+export type { TranslateRequest } from "@/domain/translation-request";
 
 export const TRANSLATE_PORT = "translate";
 
-export const TranslateRequestSchema = v.object({
-	instructions: v.string(),
-	input: v.string(),
-});
-
-export type TranslateRequest = v.InferOutput<typeof TranslateRequestSchema>;
-
 export const TranslateEventSchema = v.variant("type", [
-	v.object({ type: v.literal("delta"), text: v.string() }),
+	TranslationOutputSchema,
 	v.object({ type: v.literal("done") }),
 	v.object({ type: v.literal("error"), failure: SerializedFailureSchema }),
 ]);
@@ -48,16 +44,6 @@ export const BACKGROUND_API = {
 	"open:options": endpoint(v.void(), v.void(), "either"),
 	"open:usage": endpoint(v.void(), v.void(), "either"),
 	"open:shortcuts": endpoint(v.void(), v.void(), "extension"),
-	"cache:lookup": endpoint(
-		v.object({ keys: v.array(v.string()) }),
-		v.array(v.nullable(v.string())),
-		"content",
-	),
-	"cache:store": endpoint(
-		v.object({ entries: v.array(CachedTranslationSchema) }),
-		v.void(),
-		"content",
-	),
 };
 
 type BackgroundApi = typeof BACKGROUND_API;

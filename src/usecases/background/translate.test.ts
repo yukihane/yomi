@@ -3,6 +3,9 @@ import { fakeBrowser } from "wxt/testing/fake-browser";
 
 import { ApiError } from "@/domain/api-error";
 import { TranslateFailure } from "@/domain/failure";
+import type { MessageCaller } from "@/domain/message-caller";
+import { selectionInstructions } from "@/domain/prompts";
+import type { TranslateRequest } from "@/domain/translation-request";
 import { streamResponse } from "@/infra/openai/client";
 import type { StreamOptions } from "@/infra/openai/client";
 import { updateSettings } from "@/infra/storage/settings";
@@ -12,11 +15,29 @@ import { translate } from "./translate";
 
 vi.mock("@/infra/openai/client", () => ({ listModels: vi.fn(), streamResponse: vi.fn() }));
 vi.mock("./auth", () => ({ getAccessToken: vi.fn() }));
+vi.mock("@/infra/browser/current-document", () => ({
+	currentDocument: vi.fn(async (source: Extract<MessageCaller, { kind: "content" }>) => source),
+}));
 
-const req = { instructions: "日本語に訳す", input: "Hello" };
+const req = { kind: "selection", targetLang: "ja", text: "Hello" } satisfies TranslateRequest;
+const caller: MessageCaller = {
+	kind: "content",
+	url: "https://a.example/page",
+	origin: "https://a.example",
+	tabId: 1,
+	documentId: "doc",
+	incognito: false,
+};
 
 function run(onDelta: (text: string) => void = () => {}) {
-	return translate(req, new AbortController().signal, onDelta);
+	return translate(
+		req,
+		new AbortController().signal,
+		(event) => {
+			if (event.type === "delta") onDelta(event.text);
+		},
+		caller,
+	);
 }
 
 describe("translate", () => {
@@ -52,8 +73,8 @@ describe("translate", () => {
 				model: "gpt-test",
 				reasoningEffort: "high",
 				fast: true,
-				instructions: req.instructions,
-				input: req.input,
+				instructions: selectionInstructions(req.targetLang),
+				input: req.text,
 			}),
 		);
 	});

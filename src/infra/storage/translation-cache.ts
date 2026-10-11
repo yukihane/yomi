@@ -25,14 +25,43 @@ type WriteTransaction = IDBPTransaction<CacheDb, [typeof STORE], "readwrite">;
 let dbPromise: Promise<IDBPDatabase<CacheDb>> | null = null;
 
 function openDb(): Promise<IDBPDatabase<CacheDb>> {
-	dbPromise ??= openDB<CacheDb>(DB_NAME, 1, {
+	if (dbPromise != null) return dbPromise;
+	const pending = Promise.withResolvers<IDBPDatabase<CacheDb>>();
+	dbPromise = pending.promise;
+	let blocked = false;
+	let opened: IDBPDatabase<CacheDb> | undefined;
+	void openDB<CacheDb>(DB_NAME, 2, {
 		upgrade(db) {
+			// 旧APIは任意キーを書けたため、新形式に合う既存行も信頼しない
+			if (db.objectStoreNames.contains(STORE)) db.deleteObjectStore(STORE);
 			db.createObjectStore(STORE, { keyPath: "key" }).createIndex(USED_AT, USED_AT);
 		},
-	}).catch((e: unknown) => {
-		dbPromise = null;
-		throw e;
-	});
+		blocked() {
+			blocked = true;
+			pending.reject(
+				new Error("キャッシュの更新が待機中です。開いている拡張の設定画面を閉じてください。"),
+			);
+		},
+		blocking() {
+			opened?.close();
+			dbPromise = null;
+		},
+		terminated() {
+			dbPromise = null;
+		},
+	}).then(
+		(db) => {
+			opened = db;
+			if (blocked) {
+				db.close();
+				dbPromise = null;
+			} else pending.resolve(db);
+		},
+		(error: unknown) => {
+			dbPromise = null;
+			pending.reject(error);
+		},
+	);
 	return dbPromise;
 }
 
@@ -43,10 +72,32 @@ async function hashKey(key: string): Promise<string> {
 }
 
 /** 途中の要求が失敗しても tx.done の reject を未処理にしない */
-async function write<T>(run: (tx: WriteTransaction) => Promise<T>): Promise<T> {
+async function write<T>(
+	run: (tx: WriteTransaction) => Promise<T>,
+	signal?: AbortSignal,
+): Promise<T> {
+	signal?.throwIfAborted();
 	const tx = (await openDb()).transaction(STORE, "readwrite");
-	const [result] = await Promise.all([run(tx), tx.done]);
-	return result;
+	const abort = () => {
+		try {
+			tx.abort();
+		} catch {}
+	};
+	signal?.addEventListener("abort", abort, { once: true });
+	try {
+		const done = tx.done;
+		const result = async () => {
+			if (signal?.aborted === true) {
+				abort();
+				signal.throwIfAborted();
+			}
+			return await run(tx);
+		};
+		const [value] = await Promise.all([result(), done]);
+		return value;
+	} finally {
+		signal?.removeEventListener("abort", abort);
+	}
 }
 
 export async function lookupTranslations(keys: string[]): Promise<(string | null)[]> {
@@ -65,7 +116,10 @@ export async function lookupTranslations(keys: string[]): Promise<(string | null
 	});
 }
 
-export async function storeTranslations(entries: CachedTranslation[]): Promise<void> {
+export async function storeTranslations(
+	entries: CachedTranslation[],
+	signal?: AbortSignal,
+): Promise<void> {
 	const rows = await Promise.all(
 		entries.map(async ({ key, translation }) => ({ key: await hashKey(key), translation })),
 	);
@@ -77,7 +131,7 @@ export async function storeTranslations(entries: CachedTranslation[]): Promise<v
 			await cursor.delete();
 			cursor = --excess > 0 ? await cursor.continue() : null;
 		}
-	});
+	}, signal);
 }
 
 export async function countTranslations(): Promise<number> {

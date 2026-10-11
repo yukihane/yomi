@@ -14,7 +14,6 @@ import { sendToContent } from "@/infra/messaging/content-client";
 import { CommandNameSchema } from "@/infra/messaging/protocol";
 import type { CommandName, ContentMessage } from "@/infra/messaging/protocol";
 import { protectAuthStorage } from "@/infra/storage/auth-access";
-import { lookupTranslations, storeTranslations } from "@/infra/storage/translation-cache";
 import {
 	getAuthState,
 	handleTabRemoved,
@@ -72,8 +71,6 @@ export default defineBackground(() => {
 			"open:options": openOptionsPage,
 			"open:usage": openUsagePage,
 			"open:shortcuts": openShortcutsPage,
-			"cache:lookup": ({ keys }) => lookupTranslations(keys),
-			"cache:store": ({ entries }) => storeTranslations(entries),
 		},
 		serializeFailure,
 	);

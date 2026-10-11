@@ -1,13 +1,9 @@
-import { createBatchDecoder, encodeBatch } from "@/domain/batch-protocol";
 import { packBatch, priorityScore } from "@/domain/batch-scheduler";
 import { FAILURE_POLICY, TranslateFailure } from "@/domain/failure";
 import type { LanguageCode } from "@/domain/languages";
 import { summarizePage } from "@/domain/page";
 import type { PageState, SegmentState, Showing } from "@/domain/page";
-import { pageInstructions } from "@/domain/prompts";
 import type { Settings } from "@/domain/settings";
-import { cacheKey } from "@/domain/translation-cache";
-import type { CachedTranslation } from "@/domain/translation-cache";
 import { DomWatcher } from "@/infra/dom/dom-watcher";
 import {
 	ensurePendingStyle,
@@ -19,7 +15,6 @@ import {
 } from "@/infra/dom/markers";
 import { Segment } from "@/infra/dom/segment";
 import { collectRuns } from "@/infra/dom/segmenter";
-import { callBackground } from "@/infra/messaging/background-client";
 import { requestTranslation, StreamCancelled } from "@/infra/messaging/translation-stream";
 import type { StreamHandle } from "@/infra/messaging/translation-stream";
 
@@ -30,18 +25,6 @@ function pageContext() {
 		'meta[name="description"], meta[property="og:description"]',
 	);
 	return { title: document.title, description: description?.content ?? "" };
-}
-
-async function lookupCache(keys: string[]): Promise<(string | null)[]> {
-	try {
-		return await callBackground("cache:lookup", { keys });
-	} catch {
-		return keys.map(() => null);
-	}
-}
-
-function storeCache(entry: CachedTranslation) {
-	callBackground("cache:store", { entries: [entry] }).catch(() => {});
 }
 
 export interface PageTranslatorHooks {
@@ -288,29 +271,22 @@ export class PageTranslator {
 			this.discard(seg);
 			return false;
 		};
-		const pageUrl = location.href;
-		const keyOf = (seg: Segment) => cacheKey(lang, pageUrl, seg.serialized.markup);
-
-		const cached = await lookupCache(batch.map(keyOf));
-		batch.forEach((seg, i) => {
-			const hit = cached[i];
-			if (hit != null && mine(seg)) this.applyResult(seg, hit, lang);
-		});
 		const misses = batch.filter(mine);
 		if (misses.length === 0) return;
 
 		const handle = requestTranslation(
 			{
-				instructions: pageInstructions(lang, pageContext()),
-				input: encodeBatch(misses.map((seg) => seg.serialized.markup)),
+				kind: "page",
+				targetLang: lang,
+				context: pageContext(),
+				segments: misses.map((seg) => seg.serialized.markup),
 			},
-			createBatchDecoder((index, markup) => {
+			() => {},
+			(index, markup) => {
 				const seg = misses[index];
 				if (!seg || !mine(seg)) return;
 				this.applyResult(seg, markup, lang);
-				// バッチの完了を待って書き込むと、途中でページを離れたときに訳せた分まで失われる
-				storeCache({ key: keyOf(seg), translation: markup });
-			}),
+			},
 		);
 		this.inflight.add(handle);
 		try {

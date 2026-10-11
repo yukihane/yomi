@@ -8,7 +8,16 @@ import { toTranslateFailure } from "@/domain/api-error";
 import { serveBackgroundApi, serveTranslatePort } from "./background-server";
 import type { BackgroundHandlers, TranslateHandler } from "./background-server";
 
-beforeEach(() => fakeBrowser.reset());
+beforeEach(() => {
+	fakeBrowser.reset();
+	for (const event of [
+		fakeBrowser.webNavigation.onCommitted,
+		fakeBrowser.webNavigation.onHistoryStateUpdated,
+	]) {
+		vi.spyOn(event, "addListener").mockImplementation(() => {});
+		vi.spyOn(event, "removeListener").mockImplementation(() => {});
+	}
+});
 afterEach(() => vi.restoreAllMocks());
 
 function contentSender(): Browser.runtime.MessageSender {
@@ -34,17 +43,15 @@ function handlers(): BackgroundHandlers {
 		"open:options": vi.fn().mockResolvedValue(undefined),
 		"open:usage": vi.fn().mockResolvedValue(undefined),
 		"open:shortcuts": vi.fn().mockResolvedValue(undefined),
-		"cache:lookup": vi.fn().mockResolvedValue([]),
-		"cache:store": vi.fn().mockResolvedValue(undefined),
 	};
 }
 
-async function request(sender: unknown, type: string) {
+async function request(sender: unknown, type: string, params?: unknown) {
 	const api = handlers();
 	const listener = vi.spyOn(fakeBrowser.runtime.onMessage, "addListener");
 	serveBackgroundApi(api, (error) => toTranslateFailure(error).serialize());
 	const response = vi.fn<(value: unknown) => void>();
-	listener.mock.calls[0]![0]({ type }, sender as Browser.runtime.MessageSender, response);
+	listener.mock.calls[0]![0]({ type, params }, sender as Browser.runtime.MessageSender, response);
 	await vi.waitFor(() => expect(response).toHaveBeenCalledOnce());
 	return { api, value: response.mock.calls[0]![0] };
 }
@@ -95,6 +102,14 @@ it("content script から固定の設定画面を開ける", async () => {
 	expect(value).toMatchObject({ ok: true });
 });
 
+it.each([
+	["cache:lookup", { keys: ["other-site-key"] }],
+	["cache:store", { entries: [{ key: "other-site-key", translation: "poison" }] }],
+])("旧%s APIから任意キーにアクセスできない", async (type, params) => {
+	const { value } = await request(contentSender(), type, params);
+	expect(value).toMatchObject({ ok: false });
+});
+
 it("拡張画面から翻訳ポートを使えない", () => {
 	const translate = vi.fn<TranslateHandler>().mockResolvedValue(undefined);
 	const connected = vi
@@ -115,4 +130,33 @@ it("拡張画面から翻訳ポートを使えない", () => {
 	message.mock.calls[0]?.[0]({ instructions: "日本語に翻訳", input: "Hello" });
 	expect(disconnect).toHaveBeenCalledOnce();
 	expect(translate).not.toHaveBeenCalled();
+});
+
+it("1接続の2件目の要求は切断し、最初の要求もキャンセルする", async () => {
+	const translate = vi.fn<TranslateHandler>().mockResolvedValue(undefined);
+	const connected = vi
+		.spyOn(fakeBrowser.runtime.onConnect, "addListener")
+		.mockImplementation(() => {});
+	const message = vi.fn<(callback: (raw: unknown) => void) => void>();
+	const disconnect = vi.fn();
+	const port = {
+		name: "translate",
+		sender: contentSender(),
+		onMessage: { addListener: message },
+		onDisconnect: { addListener: vi.fn() },
+		postMessage: vi.fn(),
+		disconnect,
+	} as unknown as Browser.runtime.Port;
+	serveTranslatePort(translate, (error) => toTranslateFailure(error).serialize());
+	connected.mock.calls[0]![0](port);
+	const translationRequest = { kind: "selection", targetLang: "ja", text: "Hello" };
+	message.mock.calls[0]![0](translationRequest);
+	message.mock.calls[0]![0](translationRequest);
+	await vi.waitFor(() => expect(translate).toHaveBeenCalledOnce());
+	expect(disconnect).toHaveBeenCalledOnce();
+	expect(translate.mock.calls[0]![1].aborted).toBe(true);
+	expect(translate.mock.calls[0]![3]).toMatchObject({
+		origin: "https://example.com",
+		documentId: "document-1",
+	});
 });
