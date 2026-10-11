@@ -24,3 +24,34 @@ it("巨大な単独セグメントと文脈を拒否する", () => {
 		}).success,
 	).toBe(false);
 });
+
+it("件数・ページ合計・説明文の上限を検証する", () => {
+	const req = {
+		kind: "page",
+		targetLang: "ja",
+		segments: ["x"],
+		context: { title: "", description: "" },
+	};
+	expect(
+		v.safeParse(TranslateRequestSchema, { ...req, segments: Array.from({ length: 26 }, () => "x") })
+			.success,
+	).toBe(false);
+	expect(
+		v.safeParse(TranslateRequestSchema, {
+			...req,
+			segments: ["x".repeat(8000), "x".repeat(8000), "x".repeat(4000)],
+		}).success,
+	).toBe(true);
+	expect(
+		v.safeParse(TranslateRequestSchema, {
+			...req,
+			segments: ["x".repeat(8000), "x".repeat(8000), "x".repeat(4001)],
+		}).success,
+	).toBe(false);
+	expect(
+		v.safeParse(TranslateRequestSchema, {
+			...req,
+			context: { title: "", description: "x".repeat(2049) },
+		}).success,
+	).toBe(false);
+});
