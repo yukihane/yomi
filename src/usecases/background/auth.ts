@@ -122,17 +122,22 @@ async function completeSignIn(pending: PendingSignIn, callback: URL): Promise<vo
 	if (previous?.subject != null && previous.subject !== claims.sub)
 		throw new Error("サインインしたアカウントが一致しません。先にサインアウトしてください。");
 
-	await clearCache();
-	credentialsGeneration++;
-	await credentialsItem.setValue({
-		clientId,
-		subject: claims.sub,
-		email: claims.email,
-		idToken: tokens.idToken,
-		accessToken: tokens.accessToken,
-		refreshToken: tokens.refreshToken,
-		expiresAt: Date.now() + tokens.expiresIn * 1000,
-	});
+	const resume = pauseTranslations();
+	try {
+		await clearCache();
+		credentialsGeneration++;
+		await credentialsItem.setValue({
+			clientId,
+			subject: claims.sub,
+			email: claims.email,
+			idToken: tokens.idToken,
+			accessToken: tokens.accessToken,
+			refreshToken: tokens.refreshToken,
+			expiresAt: Date.now() + tokens.expiresIn * 1000,
+		});
+	} finally {
+		resume();
+	}
 }
 
 /** 進んでいたら refresh の結果を書き戻さない */

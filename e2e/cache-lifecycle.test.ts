@@ -26,7 +26,7 @@ test("既定では訳文を保存せず、再訪問でもAPIへ要求する", as
 declare const chrome: typeof Browser;
 type Delayed = typeof globalThis & { __waiting: boolean; __release: () => void };
 
-test.each(["cache:clear", "cache:disable", "auth:signOut"])(
+test.each(["cache:clear", "cache:disable", "auth:signOut", "epoch-change"])(
 	"%s の後で遅延応答が訳文を復活させない",
 	async (action) => {
 		const ext = await launchExtension();
@@ -53,9 +53,28 @@ test.each(["cache:clear", "cache:disable", "auth:signOut"])(
 			await page.bringToFront();
 			await ext.sendToTab({ type: "page:translate" });
 			await expect.poll(() => worker.evaluate(() => (globalThis as Delayed).__waiting)).toBe(true);
-			expect(
-				await options.evaluate((type) => chrome.runtime.sendMessage({ type }), action),
-			).toMatchObject({ ok: true });
+			let result: unknown = { ok: true };
+			if (action === "epoch-change") {
+				await worker.evaluate(async () => {
+					const db = await new Promise<IDBDatabase>((resolve) => {
+						const r = indexedDB.open("translation-cache", 3);
+						r.onsuccess = () => resolve(r.result);
+					});
+					try {
+						await new Promise<void>((resolve, reject) => {
+							const tx = db.transaction("meta", "readwrite");
+							tx.objectStore("meta").put(crypto.randomUUID(), "epoch");
+							tx.oncomplete = () => resolve();
+							tx.addEventListener("abort", () => reject(new Error("世代更新失敗")), { once: true });
+						});
+					} finally {
+						db.close();
+					}
+				});
+			} else {
+				result = await options.evaluate((type) => chrome.runtime.sendMessage({ type }), action);
+			}
+			expect(result).toMatchObject({ ok: true });
 			await worker.evaluate(() => (globalThis as Delayed).__release());
 			await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toMatchObject({ busy: 0 });
 			expect(
