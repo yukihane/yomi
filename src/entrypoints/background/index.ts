@@ -13,8 +13,8 @@ import { serveBackgroundApi, serveTranslatePort } from "@/infra/messaging/backgr
 import { sendToContent } from "@/infra/messaging/content-client";
 import { CommandNameSchema } from "@/infra/messaging/protocol";
 import type { CommandName, ContentMessage } from "@/infra/messaging/protocol";
-import { lookupTranslations, storeTranslations } from "@/infra/storage/translation-cache";
 import { protectAuthStorage } from "@/infra/storage/auth-access";
+import { lookupTranslations, storeTranslations } from "@/infra/storage/translation-cache";
 import {
 	getAuthState,
 	handleTabRemoved,
@@ -32,7 +32,7 @@ const COMMAND_MESSAGES: Record<CommandName, ContentMessage> = {
 const serializeFailure = (e: unknown) => toTranslateFailure(e).serialize();
 
 export default defineBackground(() => {
-	// 認証操作側でも同じ初期化を待ち、失敗時はその応答でエラーを返す。
+	// リスナー登録を初期化完了まで遅らせると、worker 復帰時のイベントを失う。
 	void protectAuthStorage().catch(() => {});
 	// service worker 再起動後もサインインを完了できるよう、リスナーはトップレベルで同期的に登録する
 	browser.tabs.onUpdated.addListener((tabId, info) => {
