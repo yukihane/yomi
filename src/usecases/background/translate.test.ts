@@ -148,3 +148,22 @@ vi.mock("./cache", () => ({
 		epoch: incognito ? null : "epoch",
 	})),
 }));
+it("出力上限を超えるdeltaを表示せず中断する", async () => {
+	await updateSettings({ model: "model" });
+	vi.mocked(getAccessToken).mockResolvedValue("token");
+	vi.mocked(streamResponse).mockImplementation(async ({ onDelta }) => onDelta("x".repeat(64001)));
+	const output = vi.fn();
+	await expect(run(output)).rejects.toThrow("翻訳結果が上限");
+	expect(output).not.toHaveBeenCalled();
+});
+it("認証待ちの間に切断した要求はAPIへ送らない", async () => {
+	await updateSettings({ model: "model" });
+	const controller = new AbortController();
+	vi.mocked(streamResponse).mockReset();
+	vi.mocked(getAccessToken).mockImplementation(async () => {
+		controller.abort();
+		return "token";
+	});
+	await expect(translate(req, controller.signal, vi.fn(), caller)).rejects.toThrow("abort");
+	expect(streamResponse).not.toHaveBeenCalled();
+});

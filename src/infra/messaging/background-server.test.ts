@@ -10,6 +10,7 @@ import type { BackgroundHandlers, TranslateHandler } from "./background-server";
 
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.spyOn(fakeBrowser.runtime, "getPlatformInfo").mockResolvedValue();
 	for (const event of [
 		fakeBrowser.webNavigation.onCommitted,
 		fakeBrowser.webNavigation.onHistoryStateUpdated,
@@ -18,7 +19,10 @@ beforeEach(() => {
 		vi.spyOn(event, "removeListener").mockImplementation(() => {});
 	}
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.useRealTimers();
+});
 
 function contentSender(): Browser.runtime.MessageSender {
 	return {
@@ -170,4 +174,71 @@ it("1接続の2件目の要求は切断し、最初の要求もキャンセル�
 		origin: "https://example.com",
 		documentId: "document-1",
 	});
+});
+
+it("未送信ポートも枠を占有し、切断と期限切れで枠とタイマーを解放する", async () => {
+	vi.useFakeTimers();
+	const translate = vi.fn<TranslateHandler>();
+	const connected = vi
+		.spyOn(fakeBrowser.runtime.onConnect, "addListener")
+		.mockImplementation(() => {});
+	serveTranslatePort(translate, (error) => toTranslateFailure(error).serialize());
+	const connect = () => {
+		const message = vi.fn<(callback: (raw: unknown) => void) => void>();
+		const disconnectEvent = vi.fn<(callback: () => void) => void>();
+		const disconnect = vi.fn();
+		const postMessage = vi.fn();
+		const port = {
+			name: "translate",
+			sender: contentSender(),
+			onMessage: { addListener: message },
+			onDisconnect: { addListener: disconnectEvent },
+			disconnect,
+			postMessage,
+		} as unknown as Browser.runtime.Port;
+		connected.mock.calls[0]![0](port);
+		return { message, disconnectEvent, disconnect, postMessage };
+	};
+	const first = connect();
+	connect();
+	connect();
+	connect();
+	expect(connect().disconnect).toHaveBeenCalledOnce();
+	first.disconnectEvent.mock.calls[0]![0]();
+	expect(connect().disconnect).not.toHaveBeenCalled();
+	await vi.advanceTimersByTimeAsync(15000);
+	expect(vi.getTimerCount()).toBe(0);
+	const last = connect();
+	expect(last.disconnect).not.toHaveBeenCalled();
+	last.disconnectEvent.mock.calls[0]![0]();
+	expect(vi.getTimerCount()).toBe(0);
+	expect(translate).not.toHaveBeenCalled();
+});
+it("応答が終わらない要求も120秒で中断し、枠を返す", async () => {
+	vi.useFakeTimers();
+	const pending = Promise.withResolvers<void>();
+	const translate = vi.fn<TranslateHandler>().mockReturnValue(pending.promise);
+	const connected = vi
+		.spyOn(fakeBrowser.runtime.onConnect, "addListener")
+		.mockImplementation(() => {});
+	const message = vi.fn<(callback: (raw: unknown) => void) => void>();
+	const disconnect = vi.fn();
+	const postMessage = vi.fn();
+	serveTranslatePort(translate, (error) => toTranslateFailure(error).serialize());
+	connected.mock.calls[0]![0]({
+		name: "translate",
+		sender: contentSender(),
+		onMessage: { addListener: message },
+		onDisconnect: { addListener: vi.fn() },
+		disconnect,
+		postMessage,
+	} as unknown as Browser.runtime.Port);
+	message.mock.calls[0]![0]({ kind: "selection", targetLang: "ja", text: "Hello" });
+	await vi.advanceTimersByTimeAsync(120000);
+	expect(translate.mock.calls[0]![1].aborted).toBe(true);
+	expect(disconnect).toHaveBeenCalledOnce();
+	expect(vi.getTimerCount()).toBe(0);
+	pending.resolve();
+	await pending.promise;
+	expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
 });

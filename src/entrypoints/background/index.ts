@@ -3,12 +3,7 @@ import * as v from "valibot";
 import { browser, defineBackground } from "#imports";
 import { toTranslateFailure } from "@/domain/api-error";
 import { ContextMenuIdSchema, setUpContextMenus } from "@/infra/browser/context-menus";
-import {
-	activeTabId,
-	openOptionsPage,
-	openShortcutsPage,
-	openUsagePage,
-} from "@/infra/browser/tabs";
+import { activeTabId, openOptionsPage } from "@/infra/browser/tabs";
 import { serveBackgroundApi, serveTranslatePort } from "@/infra/messaging/background-server";
 import { sendToContent } from "@/infra/messaging/content-client";
 import { CommandNameSchema } from "@/infra/messaging/protocol";
@@ -28,6 +23,7 @@ import {
 	clearCache,
 	initializeCache,
 } from "@/usecases/background/cache";
+import { openOptions, openUsage, openShortcuts } from "@/usecases/background/open-page";
 import { listModels, translate } from "@/usecases/background/translate";
 
 const COMMAND_MESSAGES: Record<CommandName, ContentMessage> = {
@@ -80,9 +76,9 @@ export default defineBackground(() => {
 			"auth:signIn": startSignIn,
 			"auth:signOut": signOut,
 			"models:list": listModels,
-			"open:options": openOptionsPage,
-			"open:usage": openUsagePage,
-			"open:shortcuts": openShortcutsPage,
+			"open:options": openOptions,
+			"open:usage": openUsage,
+			"open:shortcuts": openShortcuts,
 		},
 		serializeFailure,
 	);
