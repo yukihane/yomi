@@ -4,6 +4,7 @@ const TranslateErrorKindSchema = v.picklist([
 	"signed_out",
 	"no_model",
 	"usage_limit",
+	"request_limit",
 	"not_eligible",
 	"extension_reloaded",
 	"unavailable",
@@ -47,6 +48,7 @@ interface FailurePolicy {
 export const FAILURE_POLICY: Record<TranslateErrorKind, FailurePolicy> = {
 	signed_out: { fatal: true, remedy: "sign_in" },
 	no_model: { fatal: true, remedy: "open_options" },
+	request_limit: { fatal: true, remedy: null },
 	usage_limit: { fatal: true, remedy: "open_usage" },
 	not_eligible: { fatal: true, remedy: null },
 	extension_reloaded: { fatal: true, remedy: null },
