@@ -47,7 +47,9 @@ export class Segment {
 	isCurrentSource(): boolean {
 		if (!this.parent.isConnected || isHidden(this.parent)) return false;
 		if (this.original.some((node) => node.parentNode !== this.parent)) return false;
-		return serialize({ parent: this.parent, nodes: this.original }).markup === this.serialized.markup;
+		return (
+			serialize({ parent: this.parent, nodes: this.original }).markup === this.serialized.markup
+		);
 	}
 
 	applyTranslation(markup: string, lang: LanguageCode) {

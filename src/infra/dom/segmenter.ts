@@ -94,7 +94,8 @@ export function excludesSubtree(el: Element): boolean {
 	for (let ancestor: Element | null = el; ancestor; ancestor = ancestor.parentElement) {
 		if (SKIP_TAGS.has(ancestor.tagName) || isExcluded(ancestor)) return true;
 		const style = getComputedStyle(ancestor);
-		if (style.display === "none" || style.opacity === "0" || style.contentVisibility === "hidden") return true;
+		if (style.display === "none" || style.opacity === "0" || style.contentVisibility === "hidden")
+			return true;
 	}
 	return false;
 }
@@ -113,7 +114,10 @@ export function isHidden(el: Element): boolean {
 	if (excludesSubtree(el)) return true;
 	const style = getComputedStyle(el);
 	if (style.visibility === "hidden" || style.visibility === "collapse") return true;
-	return !el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) && style.display !== "contents";
+	return (
+		!el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) &&
+		style.display !== "contents"
+	);
 }
 
 // white-space-collapse と text-wrap-mode の組み合わせによっては "preserve-breaks nowrap" のような値になる

@@ -1,7 +1,15 @@
 import { blockAncestor, isHidden } from "./segmenter";
 
 const RESCAN_THROTTLE_MS = 400;
-const VISIBILITY_ATTRIBUTES = ["class", "style", "hidden", "open", "aria-hidden", "translate", "contenteditable"];
+const VISIBILITY_ATTRIBUTES = [
+	"class",
+	"style",
+	"hidden",
+	"open",
+	"aria-hidden",
+	"translate",
+	"contenteditable",
+];
 
 export interface DomWatcherHandlers {
 	isOwn: (node: Node) => boolean;
