@@ -16,6 +16,9 @@ vi.mock("@/infra/storage/translation-cache", () => ({
 	storeTranslations: vi.fn(),
 }));
 vi.mock("./auth", () => ({ getAccessToken: vi.fn() }));
+vi.mock("@/infra/browser/current-document", () => ({
+	currentDocument: vi.fn(async (source: Extract<MessageCaller, { kind: "content" }>) => source),
+}));
 
 const req: TranslateRequest = {
 	kind: "page",

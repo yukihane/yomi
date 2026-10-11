@@ -15,6 +15,9 @@ import { translate } from "./translate";
 
 vi.mock("@/infra/openai/client", () => ({ listModels: vi.fn(), streamResponse: vi.fn() }));
 vi.mock("./auth", () => ({ getAccessToken: vi.fn() }));
+vi.mock("@/infra/browser/current-document", () => ({
+	currentDocument: vi.fn(async (source: Extract<MessageCaller, { kind: "content" }>) => source),
+}));
 
 const req = { kind: "selection", targetLang: "ja", text: "Hello" } satisfies TranslateRequest;
 const caller: MessageCaller = {

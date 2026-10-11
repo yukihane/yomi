@@ -6,6 +6,7 @@ import type { ModelInfo } from "@/domain/models";
 import { pageInstructions, selectionInstructions } from "@/domain/prompts";
 import { cacheKey } from "@/domain/translation-cache";
 import type { TranslationOutput } from "@/domain/translation-request";
+import { currentDocument } from "@/infra/browser/current-document";
 import type { TranslateRequest } from "@/infra/messaging/protocol";
 import { listModels as fetchModels, streamResponse } from "@/infra/openai/client";
 import { getSettings } from "@/infra/storage/settings";
@@ -25,6 +26,7 @@ export async function translate(
 ): Promise<void> {
 	if (caller.kind !== "content")
 		throw new TranslateFailure("other", "この画面から翻訳できません。");
+	const source = await currentDocument(caller);
 	signal.throwIfAborted();
 	const { model, reasoningEffort, fastMode } = await getSettings();
 	if (model == null) throw new TranslateFailure("no_model", "翻訳に使うモデルを選択してください。");
@@ -62,7 +64,7 @@ export async function translate(
 	await getAccessToken();
 	signal.throwIfAborted();
 	const keys = req.segments.map((markup) =>
-		cacheKey(req.targetLang, caller.url, markup, {
+		cacheKey(req.targetLang, source.url, markup, {
 			model,
 			reasoningEffort,
 			fastMode,
@@ -86,6 +88,9 @@ export async function translate(
 	});
 	signal.throwIfAborted();
 	const translated = decodeCompleteBatch(output, missing.length);
+	const current = await currentDocument(source);
+	if (current.url !== source.url)
+		throw new TranslateFailure("other", "翻訳中にページが移動したため処理を中断しました。");
 	if (!caller.incognito) {
 		await storeTranslations(
 			missing.map(({ key }, index) => ({ key, translation: translated[index]! })),

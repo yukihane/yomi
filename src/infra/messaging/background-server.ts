@@ -84,10 +84,26 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 		}
 		const controller = new AbortController();
 		let started = false;
-		port.onDisconnect.addListener(() => controller.abort());
+		const onNavigation = (details: { tabId: number; frameId: number }) => {
+			if (caller.kind === "content" && details.tabId === caller.tabId && details.frameId === 0) {
+				controller.abort();
+				port.disconnect();
+			}
+		};
+		const removeNavigationListeners = () => {
+			browser.webNavigation.onCommitted.removeListener(onNavigation);
+			browser.webNavigation.onHistoryStateUpdated.removeListener(onNavigation);
+		};
+		browser.webNavigation.onCommitted.addListener(onNavigation);
+		browser.webNavigation.onHistoryStateUpdated.addListener(onNavigation);
+		port.onDisconnect.addListener(() => {
+			controller.abort();
+			removeNavigationListeners();
+		});
 		port.onMessage.addListener((raw: unknown) => {
 			if (started || controller.signal.aborted) {
 				controller.abort();
+				removeNavigationListeners();
 				port.disconnect();
 				return;
 			}
@@ -113,7 +129,10 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 					() => post({ type: "done" }),
 					(e: unknown) => post({ type: "error", failure: toFailure(e) }),
 				)
-				.finally(() => clearInterval(keepAlive));
+				.finally(() => {
+					clearInterval(keepAlive);
+					removeNavigationListeners();
+				});
 		});
 	});
 }
