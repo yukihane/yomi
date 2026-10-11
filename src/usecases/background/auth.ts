@@ -3,7 +3,6 @@ import { TranslateFailure } from "@/domain/failure";
 import {
 	buildAuthorizeUrl,
 	createPkce,
-	decodeIdToken,
 	hasRequiredScope,
 	isRedirectUrl,
 	parseAuthorizationCallback,
@@ -13,19 +12,24 @@ import {
 	TokenEndpointError,
 } from "@/domain/oauth";
 import type { TokenResponse } from "@/domain/oauth";
+import type { SignOutResult } from "@/domain/sign-out";
 import type { AuthState } from "@/infra/messaging/protocol";
+import { verifyIdToken } from "@/infra/oauth/id-token";
 import { postToken, revokeRefreshToken } from "@/infra/oauth/token-endpoint";
 import { clientIdItem, credentialsItem, hostIdItem, signInItem } from "@/infra/storage/auth";
 import type { Credentials, PendingSignIn } from "@/infra/storage/auth";
+import { protectAuthStorage } from "@/infra/storage/auth-access";
 
 const REFRESH_MARGIN_MS = 60 * 1000;
 
 export async function getAuthState(): Promise<AuthState> {
+	await protectAuthStorage();
 	const creds = await credentialsItem.getValue();
 	return { signedIn: creds != null, email: creds?.email ?? null };
 }
 
 export async function startSignIn(): Promise<void> {
+	await protectAuthStorage();
 	const current = await signInItem.getValue();
 	if (current?.status === "pending") {
 		const exists = await browser.tabs.get(current.tabId).then(
@@ -70,6 +74,7 @@ export async function startSignIn(): Promise<void> {
 
 export async function handleTabUpdated(tabId: number, url: string | undefined): Promise<boolean> {
 	if (url == null || !isRedirectUrl(url)) return false;
+	await protectAuthStorage();
 	const pending = await signInItem.getValue();
 	if (pending?.status !== "pending" || pending.tabId !== tabId) return false;
 	await browser.tabs.remove(tabId);
@@ -87,6 +92,7 @@ export async function handleTabUpdated(tabId: number, url: string | undefined): 
 }
 
 export async function handleTabRemoved(tabId: number): Promise<void> {
+	await protectAuthStorage();
 	const pending = await signInItem.getValue();
 	if (pending?.status === "pending" && pending.tabId === tabId) await signInItem.setValue(null);
 }
@@ -109,12 +115,15 @@ async function completeSignIn(pending: PendingSignIn, callback: URL): Promise<vo
 		);
 	}
 	if (tokens.idToken == null) throw new Error("ID トークンが発行されませんでした");
-	const claims = decodeIdToken(tokens.idToken);
-	if (claims.nonce !== pending.nonce) throw new Error("ID トークンの nonce が一致しません");
+	const claims = await verifyIdToken(tokens.idToken, clientId, pending.nonce);
+	const previous = await credentialsItem.getValue();
+	if (previous?.subject != null && previous.subject !== claims.sub)
+		throw new Error("サインインしたアカウントが一致しません。先にサインアウトしてください。");
 
 	credentialsGeneration++;
 	await credentialsItem.setValue({
 		clientId,
+		subject: claims.sub,
 		email: claims.email,
 		idToken: tokens.idToken,
 		accessToken: tokens.accessToken,
@@ -128,6 +137,7 @@ let credentialsGeneration = 0;
 let refreshPromise: Promise<Credentials> | null = null;
 
 export async function getAccessToken(forceRefresh = false): Promise<string> {
+	await protectAuthStorage();
 	const creds = await credentialsItem.getValue();
 	if (!creds)
 		throw new TranslateFailure("signed_out", "翻訳するには ChatGPT でサインインしてください。");
@@ -161,11 +171,19 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 		}
 		throw e;
 	}
+	const claims =
+		tokens.idToken == null ? null : await verifyIdToken(tokens.idToken, creds.clientId);
+	if (claims != null && creds.subject != null && claims.sub !== creds.subject)
+		throw new TranslateFailure(
+			"signed_out",
+			"更新されたアカウント情報が一致しません。再度サインインしてください。",
+		);
 	if (generation !== credentialsGeneration) {
 		throw new TranslateFailure("signed_out", "サインイン状態が変わったため処理を中断しました");
 	}
 	const next: Credentials = {
 		...creds,
+		...(claims == null ? {} : { subject: claims.sub, email: claims.email }),
 		accessToken: tokens.accessToken,
 		refreshToken: tokens.refreshToken,
 		// refresh 応答の id_token は省略されうる
@@ -176,17 +194,19 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 	return next;
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(): Promise<SignOutResult> {
+	await protectAuthStorage();
 	credentialsGeneration++;
 	// 進行中の refresh が新しい refresh token を受け取っていれば、そちらを revoke する
 	await refreshPromise?.catch(() => {});
 	const creds = await credentialsItem.getValue();
 	await credentialsItem.setValue(null);
-	if (!creds) return;
+	if (!creds) return { localCleared: true, remote: "not_needed" };
 	try {
 		await revokeRefreshToken(creds.refreshToken, creds.clientId);
+		return { localCleared: true, remote: "revoked" };
 	} catch {
-		// ローカルの資格情報は既に消しているので、revocation の失敗でサインアウトを妨げない
+		return { localCleared: true, remote: "failed" };
 	}
 }
 

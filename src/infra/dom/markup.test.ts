@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { parse } from "@/domain/markup";
 
 import { build, serialize } from "./markup";
 
+afterEach(() => document.body.replaceChildren());
+
 function paragraph(html: string): HTMLParagraphElement {
 	const p = document.createElement("p");
 	p.innerHTML = html;
+	document.body.append(p);
 	return p;
 }
 

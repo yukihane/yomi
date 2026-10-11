@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { SerializedFailureSchema } from "@/domain/failure";
 import type { MessageAudience } from "@/domain/message-caller";
 import { ModelInfoSchema } from "@/domain/models";
+import { SignOutResultSchema } from "@/domain/sign-out";
 import { TranslationOutputSchema } from "@/domain/translation-request";
 
 export { TranslateRequestSchema } from "@/domain/translation-request";
@@ -38,7 +39,7 @@ const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(
 export const BACKGROUND_API = {
 	"auth:getState": endpoint(v.void(), AuthStateSchema, "extension"),
 	"auth:signIn": endpoint(v.void(), v.void(), "extension"),
-	"auth:signOut": endpoint(v.void(), v.void(), "extension"),
+	"auth:signOut": endpoint(v.void(), SignOutResultSchema, "extension"),
 	"models:list": endpoint(v.void(), v.array(ModelInfoSchema), "extension"),
 	"open:options": endpoint(v.void(), v.void(), "either"),
 	"open:usage": endpoint(v.void(), v.void(), "either"),

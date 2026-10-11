@@ -5,8 +5,8 @@ import {
 	TokenEndpointError,
 	buildAuthorizeUrl,
 	createPkce,
-	decodeIdToken,
 	hasRequiredScope,
+	isRedirectUrl,
 	parseAuthorizationCallback,
 	parseTokenResponse,
 } from "./oauth";
@@ -20,6 +20,30 @@ const request: AuthorizeRequest = {
 	codeChallenge: "challenge-1",
 	idTokenHint: null,
 };
+
+describe("isRedirectUrl", () => {
+	it.each([REDIRECT_URI, `${REDIRECT_URI}?state=s&code=c`, `${REDIRECT_URI}?error=access_denied`])(
+		"正規の callback %s を受け付ける",
+		(url) => {
+			expect(isRedirectUrl(url)).toBe(true);
+		},
+	);
+
+	it.each([
+		`${REDIRECT_URI}-extra?state=s&code=c`,
+		`${REDIRECT_URI}/child`,
+		`${REDIRECT_URI}#code=c`,
+		"http://127.0.0.1:1456/callback",
+		"https://127.0.0.1:1455/callback",
+		"http://127.0.0.1.example:1455/callback",
+		"http://user:password@127.0.0.1:1455/callback",
+		"http://127.0.0.1:1455/%63allback",
+		"/callback?code=c",
+		"不正な URL",
+	])("異なる callback %s を拒否する", (url) => {
+		expect(isRedirectUrl(url)).toBe(false);
+	});
+});
 
 describe("buildAuthorizeUrl", () => {
 	it("初回は dynamic client として登録を求め、アプリ名を伝える", () => {
@@ -52,6 +76,15 @@ describe("buildAuthorizeUrl", () => {
 
 describe("parseAuthorizationCallback", () => {
 	const callback = (query: string) => new URL(`${REDIRECT_URI}?${query}`);
+
+	it("state が一致していても別のパスの callback は拒否する", () => {
+		expect(() =>
+			parseAuthorizationCallback(new URL(`${REDIRECT_URI}-extra?state=s&code=c`), {
+				state: "s",
+				clientId: "old",
+			}),
+		).toThrow("リダイレクト先");
+	});
 
 	it("code と発行された client_id を取り出す", () => {
 		expect(
@@ -176,37 +209,6 @@ describe("hasRequiredScope", () => {
 		expect(hasRequiredScope("openid chatgpt.tokens.use.direct email")).toBe(true);
 		expect(hasRequiredScope("openid email")).toBe(false);
 		expect(hasRequiredScope("chatgpt.tokens.use.direct.extra")).toBe(false);
-	});
-});
-
-describe("decodeIdToken", () => {
-	const jwt = (claims: unknown) =>
-		`header.${new TextEncoder().encode(JSON.stringify(claims)).toBase64({ alphabet: "base64url", omitPadding: true })}.signature`;
-
-	it("nonce と email を取り出す", () => {
-		expect(decodeIdToken(jwt({ nonce: "n", email: "a@example.com" }))).toEqual({
-			nonce: "n",
-			email: "a@example.com",
-		});
-	});
-
-	it("base64url の - と _ を含むペイロードを UTF-8 として読む", () => {
-		// "?>" と "?" の並びは base64 で "+" や "/" になり、base64url では "-" と "_" に置き換わる
-		const token = jwt({ nonce: "??>>", email: "山田@例え.jp" });
-		expect(token.split(".")[1]).toMatch(/[-_]/u);
-		expect(decodeIdToken(token)).toEqual({ nonce: "??>>", email: "山田@例え.jp" });
-	});
-
-	it("email がなければ null にする", () => {
-		expect(decodeIdToken(jwt({ nonce: "n" })).email).toBeNull();
-	});
-
-	it("nonce がなければ失敗する", () => {
-		expect(() => decodeIdToken(jwt({ email: "a@example.com" }))).toThrow("nonce");
-	});
-
-	it("ペイロード部がなければ失敗する", () => {
-		expect(() => decodeIdToken("only-header")).toThrow("形式");
 	});
 });
 
