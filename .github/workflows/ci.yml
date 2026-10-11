@@ -73,11 +73,26 @@ jobs:
       - name: Setup | Development environment
         uses: $/.github/actions/setup
 
+      - name: Build | Extension
+        run: pnpm run build
+
+      - name: 診断 | 追加インストール前のシステムブラウザー
+        env:
+          CHROMIUM_PATH: /usr/bin/chromium
+          DEBUG: pw:browser
+        run: |
+          ls -l /usr/bin/chromium
+          /usr/bin/chromium --version
+          node scripts/diagnose-chromium.mjs
+
       - name: Setup | Chromium
         run: pnpm exec playwright-core install --with-deps --no-shell chromium
 
-      - name: Build | Extension
-        run: pnpm run build
+      - name: 診断 | 追加インストール後のシステムブラウザー
+        env:
+          CHROMIUM_PATH: /usr/bin/chromium
+          DEBUG: pw:browser
+        run: node scripts/diagnose-chromium.mjs
 
       - name: Run | E2E
         env:
