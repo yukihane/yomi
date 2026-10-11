@@ -30,7 +30,6 @@ test("content script の管理操作を拒否し、設定画面の認証表示�
 			expect(result.result.value).toMatchObject({ ok: false });
 			expect(result.result.value).not.toHaveProperty("value");
 		}
-		const opened = ext.context.waitForEvent("page");
 		const result = await cdp.send("Runtime.evaluate", {
 			contextId,
 			expression: 'chrome.runtime.sendMessage({type: "open:options"})',
@@ -39,7 +38,9 @@ test("content script の管理操作を拒否し、設定画面の認証表示�
 		});
 		expect(result.exceptionDetails).toBeUndefined();
 		expect(result.result.value).toMatchObject({ ok: true });
-		const options = await opened;
+		const optionsUrl = `chrome-extension://${ext.extensionId}/options.html`;
+		await expect.poll(() => ext.context.pages().some((p) => p.url() === optionsUrl)).toBe(true);
+		const options = ext.context.pages().find((p) => p.url() === optionsUrl)!;
 		await expect.poll(() => options.getByText("tester@example.com").count()).toBe(1);
 	} finally {
 		await ext.context.close();
