@@ -3,7 +3,6 @@ import { TranslateFailure } from "@/domain/failure";
 import {
 	buildAuthorizeUrl,
 	createPkce,
-	decodeIdToken,
 	hasRequiredScope,
 	isRedirectUrl,
 	parseAuthorizationCallback,
@@ -14,6 +13,7 @@ import {
 } from "@/domain/oauth";
 import type { TokenResponse } from "@/domain/oauth";
 import type { AuthState } from "@/infra/messaging/protocol";
+import { verifyIdToken } from "@/infra/oauth/id-token";
 import { postToken, revokeRefreshToken } from "@/infra/oauth/token-endpoint";
 import { clientIdItem, credentialsItem, hostIdItem, signInItem } from "@/infra/storage/auth";
 import type { Credentials, PendingSignIn } from "@/infra/storage/auth";
@@ -109,12 +109,15 @@ async function completeSignIn(pending: PendingSignIn, callback: URL): Promise<vo
 		);
 	}
 	if (tokens.idToken == null) throw new Error("ID トークンが発行されませんでした");
-	const claims = decodeIdToken(tokens.idToken);
-	if (claims.nonce !== pending.nonce) throw new Error("ID トークンの nonce が一致しません");
+	const claims = await verifyIdToken(tokens.idToken, clientId, pending.nonce);
+	const previous = await credentialsItem.getValue();
+	if (previous?.subject != null && previous.subject !== claims.sub)
+		throw new Error("サインインしたアカウントが一致しません。先にサインアウトしてください。");
 
 	credentialsGeneration++;
 	await credentialsItem.setValue({
 		clientId,
+		subject: claims.sub,
 		email: claims.email,
 		idToken: tokens.idToken,
 		accessToken: tokens.accessToken,
@@ -161,11 +164,19 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 		}
 		throw e;
 	}
+	const claims =
+		tokens.idToken == null ? null : await verifyIdToken(tokens.idToken, creds.clientId);
+	if (claims != null && creds.subject != null && claims.sub !== creds.subject)
+		throw new TranslateFailure(
+			"signed_out",
+			"更新されたアカウント情報が一致しません。再度サインインしてください。",
+		);
 	if (generation !== credentialsGeneration) {
 		throw new TranslateFailure("signed_out", "サインイン状態が変わったため処理を中断しました");
 	}
 	const next: Credentials = {
 		...creds,
+		...(claims == null ? {} : { subject: claims.sub, email: claims.email }),
 		accessToken: tokens.accessToken,
 		refreshToken: tokens.refreshToken,
 		// refresh 応答の id_token は省略されうる

@@ -4,6 +4,7 @@ import { defineValidatedItem } from "./item";
 
 const CredentialsSchema = v.object({
 	clientId: v.string(),
+	subject: v.optional(v.string()),
 	email: v.nullable(v.string()),
 	idToken: v.string(),
 	accessToken: v.string(),

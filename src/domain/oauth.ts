@@ -119,26 +119,6 @@ export function hasRequiredScope(scope: string): boolean {
 	return scope.split(" ").includes(REQUIRED_SCOPE);
 }
 
-export interface IdTokenClaims {
-	nonce: string;
-	email: string | null;
-}
-
-/** 署名は検証しない。トークンは TLS で発行元から直接受け取っており、表示用の email と nonce の照合にだけ使う */
-export function decodeIdToken(jwt: string): IdTokenClaims {
-	const payload = jwt.split(".")[1];
-	if (payload == null || payload === "") throw new Error("ID トークンの形式が不正です");
-	const bytes = Uint8Array.fromBase64(payload, { alphabet: "base64url" });
-	const claims: unknown = JSON.parse(new TextDecoder().decode(bytes));
-	if (!isRecord(claims) || typeof claims["nonce"] !== "string") {
-		throw new Error("ID トークンに nonce がありません");
-	}
-	return {
-		nonce: claims["nonce"],
-		email: typeof claims["email"] === "string" ? claims["email"] : null,
-	};
-}
-
 export async function createPkce(): Promise<{ verifier: string; challenge: string }> {
 	const verifier = randomToken(32);
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
