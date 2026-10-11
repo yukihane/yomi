@@ -76,23 +76,28 @@ jobs:
       - name: Build | Extension
         run: pnpm run build
 
-      - name: 診断 | 追加インストール前のシステムブラウザー
+      - name: 診断 | 元の設定で E2E
+        continue-on-error: true
         env:
           CHROMIUM_PATH: /usr/bin/chromium
-          DEBUG: pw:browser
+          E2E_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots-original
+          DEBUG: pw:api,pw:browser
         run: |
-          ls -l /usr/bin/chromium
-          /usr/bin/chromium --version
-          node scripts/diagnose-chromium.mjs
+          mkdir -p "$E2E_SCREENSHOT_DIR"
+          pnpm run test:e2e
+
+      - name: 診断 | システムブラウザーで直列実行
+        continue-on-error: true
+        env:
+          CHROMIUM_PATH: /usr/bin/chromium
+          E2E_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots-serial
+          DEBUG: pw:api,pw:browser
+        run: |
+          mkdir -p "$E2E_SCREENSHOT_DIR"
+          pnpm run test:e2e --no-file-parallelism
 
       - name: Setup | Chromium
         run: pnpm exec playwright-core install --with-deps --no-shell chromium
-
-      - name: 診断 | 追加インストール後のシステムブラウザー
-        env:
-          CHROMIUM_PATH: /usr/bin/chromium
-          DEBUG: pw:browser
-        run: node scripts/diagnose-chromium.mjs
 
       - name: Run | E2E
         env:
