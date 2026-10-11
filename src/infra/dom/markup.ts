@@ -10,7 +10,7 @@ import {
 	tokenize,
 } from "@/domain/markup";
 
-import { isAtomic, isHidden, keepsNewlines } from "./segmenter";
+import { isAtomic, isTextHidden, keepsNewlines } from "./segmenter";
 import type { Run } from "./segmenter";
 
 /** モデル出力は HTML として解釈せず、テキストノードの生成と既存要素の複製だけで組み立てるので XSS にならない */
@@ -48,7 +48,7 @@ export function serialize({ parent, nodes }: Run): Serialized {
 		let out = "";
 		for (const node of list) {
 			if (node instanceof Text) {
-				if (node.parentElement && isHidden(node.parentElement)) continue;
+				if (isTextHidden(node)) continue;
 				const slot = slots.at(-1)!;
 				out += escapeText(collapseWhitespace(node.data, slot.keepNewlines));
 				slot.texts.push(node);

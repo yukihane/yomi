@@ -40,10 +40,12 @@ test("非表示の本文とインラインを送らず、表示される子と�
 			<p style="opacity:0">SECRET_OPACITY</p>
 			<p style="display:none">SECRET_DISPLAY</p>
 			<p hidden>SECRET_HIDDEN</p>
+			<details>SECRET_DETAILS_TEXT<summary>More details</summary><div style="display:contents">SECRET_CLOSED_CONTENTS</div></details>
 			<p>Public <span style="visibility:hidden">SECRET_INLINE</span> text</p>
 			<div style="display:contents;opacity:0"><p>SECRET_CONTENTS</p></div>
 			<div style="visibility:hidden">SECRET_PARENT<p id="override" style="visibility:visible">Visible child</p></div>
 			<div style="display:contents"><p id="contents">Visible contents</p></div>
+			<div id="direct-contents" style="display:contents">Visible direct contents</div>
 			<p id="far" style="position:absolute;top:50000px">Offscreen text</p>`;
 	});
 	await ext.sendToTab({ type: "page:translate" });
@@ -52,6 +54,7 @@ test("非表示の本文とインラインを送らず、表示される子と�
 	expect(await sentText()).not.toContain("SECRET_");
 	expect(await page.textContent("#override")).toContain("JA:");
 	expect(await page.textContent("#contents")).toContain("JA:");
+	expect(await page.textContent("#direct-contents")).toContain("JA:");
 	expect(await page.textContent("span")).toBe("SECRET_INLINE");
 });
 

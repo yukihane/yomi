@@ -93,6 +93,10 @@ export function isAtomic(el: Element): boolean {
 export function excludesSubtree(el: Element): boolean {
 	for (let ancestor: Element | null = el; ancestor; ancestor = ancestor.parentElement) {
 		if (SKIP_TAGS.has(ancestor.tagName) || isExcluded(ancestor)) return true;
+		if (ancestor instanceof HTMLDetailsElement && !ancestor.open && ancestor !== el) {
+			const summary = Array.from(ancestor.children).find((child) => child.tagName === "SUMMARY");
+			if (!summary?.contains(el)) return true;
+		}
 		const style = getComputedStyle(ancestor);
 		if (style.display === "none" || style.opacity === "0" || style.contentVisibility === "hidden")
 			return true;
@@ -118,6 +122,11 @@ export function isHidden(el: Element): boolean {
 		!el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) &&
 		style.display !== "contents"
 	);
+}
+
+export function isTextHidden(node: Text): boolean {
+	const parent = node.parentElement;
+	return parent == null || isHidden(parent) || (parent instanceof HTMLDetailsElement && !parent.open);
 }
 
 // white-space-collapse と text-wrap-mode の組み合わせによっては "preserve-breaks nowrap" のような値になる
@@ -175,7 +184,10 @@ export function collectRuns(
 			if (known(child)) {
 				flush();
 			} else if (child instanceof Text) {
-				run.push(child);
+				if (isTextHidden(child)) {
+					flush();
+					onHidden(el);
+				} else run.push(child);
 			} else if (child instanceof Element) {
 				if (isAtomic(child) || isInline(child)) {
 					run.push(child);
