@@ -141,3 +141,10 @@ describe("translate", () => {
 		expect(deltas).toEqual(["こん"]);
 	});
 });
+
+vi.mock("./cache", () => ({
+	cacheSession: vi.fn(async (signal: AbortSignal, incognito: boolean) => ({
+		signal,
+		epoch: incognito ? null : "epoch",
+	})),
+}));

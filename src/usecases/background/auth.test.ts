@@ -10,6 +10,8 @@ import type { Credentials } from "@/infra/storage/auth";
 const endpoint = vi.hoisted(() => ({ postToken: vi.fn(), revokeRefreshToken: vi.fn() }));
 vi.mock("@/infra/oauth/token-endpoint", () => endpoint);
 
+vi.mock("./cache", () => ({ clearCache: vi.fn(async () => {}) }));
+
 const MINUTE = 60 * 1000;
 
 // auth モジュールは進行中の refresh と世代カウンタをモジュール変数に持つので、テストごとに読み込み直す
@@ -286,7 +288,11 @@ describe("getAccessToken", () => {
 describe("signOut", () => {
 	it("資格情報がなければ失効通信を行わない", async () => {
 		const auth = await load();
-		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "not_needed" });
+		await expect(auth.signOut()).resolves.toEqual({
+			localCleared: true,
+			cacheCleared: true,
+			remote: "not_needed",
+		});
 		expect(endpoint.revokeRefreshToken).not.toHaveBeenCalled();
 	});
 
@@ -299,7 +305,11 @@ describe("signOut", () => {
 		await vi.waitFor(() => expect(endpoint.revokeRefreshToken).toHaveBeenCalled());
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 		response.resolve();
-		await expect(result).resolves.toEqual({ localCleared: true, remote: "revoked" });
+		await expect(result).resolves.toEqual({
+			localCleared: true,
+			cacheCleared: true,
+			remote: "revoked",
+		});
 	});
 
 	it("資格情報を消し、refresh token を revoke する", async () => {
@@ -307,7 +317,11 @@ describe("signOut", () => {
 		await auth.credentialsItem.setValue(credentials());
 		endpoint.revokeRefreshToken.mockResolvedValue(undefined);
 
-		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "revoked" });
+		await expect(auth.signOut()).resolves.toEqual({
+			localCleared: true,
+			cacheCleared: true,
+			remote: "revoked",
+		});
 
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 		expect(endpoint.revokeRefreshToken).toHaveBeenCalledWith("refresh-1", "oaiapp_1");
@@ -319,7 +333,11 @@ describe("signOut", () => {
 		await auth.credentialsItem.setValue(credentials());
 		endpoint.revokeRefreshToken.mockRejectedValue(new Error("network"));
 
-		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "failed" });
+		await expect(auth.signOut()).resolves.toEqual({
+			localCleared: true,
+			cacheCleared: true,
+			remote: "failed",
+		});
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 	});
 

@@ -21,6 +21,13 @@ import {
 	signOut,
 	startSignIn,
 } from "@/usecases/background/auth";
+import {
+	cacheStatus,
+	enableCache,
+	disableCache,
+	clearCache,
+	initializeCache,
+} from "@/usecases/background/cache";
 import { listModels, translate } from "@/usecases/background/translate";
 
 const COMMAND_MESSAGES: Record<CommandName, ContentMessage> = {
@@ -33,6 +40,7 @@ const serializeFailure = (e: unknown) => toTranslateFailure(e).serialize();
 export default defineBackground(() => {
 	// リスナー登録を初期化完了まで遅らせると、worker 復帰時のイベントを失う。
 	void protectAuthStorage().catch(() => {});
+	void initializeCache().catch(() => {});
 	// service worker 再起動後もサインインを完了できるよう、リスナーはトップレベルで同期的に登録する
 	browser.tabs.onUpdated.addListener((tabId, info) => {
 		void handleTabUpdated(tabId, info.url).then(async (signedIn) => {
@@ -64,6 +72,10 @@ export default defineBackground(() => {
 
 	serveBackgroundApi(
 		{
+			"cache:status": cacheStatus,
+			"cache:enable": enableCache,
+			"cache:disable": disableCache,
+			"cache:clear": clearCache,
 			"auth:getState": getAuthState,
 			"auth:signIn": startSignIn,
 			"auth:signOut": signOut,

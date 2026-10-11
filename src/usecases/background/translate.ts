@@ -13,6 +13,7 @@ import { getSettings } from "@/infra/storage/settings";
 import { lookupTranslations, storeTranslations } from "@/infra/storage/translation-cache";
 
 import { getAccessToken } from "./auth";
+import { cacheSession } from "./cache";
 
 export function listModels(): Promise<ModelInfo[]> {
 	return withAuthRetry(fetchModels);
@@ -26,6 +27,8 @@ export async function translate(
 ): Promise<void> {
 	if (caller.kind !== "content")
 		throw new TranslateFailure("other", "この画面から翻訳できません。");
+	const session = await cacheSession(signal, caller.incognito);
+	signal = session.signal;
 	const source = await currentDocument(caller);
 	signal.throwIfAborted();
 	const { model, reasoningEffort, fastMode } = await getSettings();
@@ -71,9 +74,10 @@ export async function translate(
 			instructions,
 		}),
 	);
-	const cached = caller.incognito
-		? keys.map(() => null)
-		: await lookupTranslations(keys).catch(() => keys.map(() => null));
+	const cached =
+		session.epoch == null
+			? keys.map(() => null)
+			: await lookupTranslations(keys, session.epoch).catch(() => keys.map(() => null));
 	signal.throwIfAborted();
 	const missing: { index: number; markup: string; key: string }[] = [];
 	req.segments.forEach((markup, index) => {
@@ -91,9 +95,10 @@ export async function translate(
 	const current = await currentDocument(source);
 	if (current.url !== source.url)
 		throw new TranslateFailure("other", "翻訳中にページが移動したため処理を中断しました。");
-	if (!caller.incognito) {
+	if (session.epoch != null) {
 		await storeTranslations(
 			missing.map(({ key }, index) => ({ key, translation: translated[index]! })),
+			session.epoch,
 			signal,
 		).catch(() => {});
 	}
