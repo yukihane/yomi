@@ -45,7 +45,8 @@ test("content script から資格情報を読み書きできない", async () =>
 		await ext.context.serviceWorkers()[0]!.evaluate(async () => {
 			const stored = await chrome.storage.local.get("credentials");
 			const credentials = stored["credentials"];
-			if (credentials == null || typeof credentials !== "object") throw new Error("テスト用の資格情報がありません");
+			if (credentials == null || typeof credentials !== "object")
+				throw new Error("テスト用の資格情報がありません");
 			await chrome.storage.local.set({
 				credentials: { ...credentials, refreshToken: "updated-dummy-refresh" },
 			});
