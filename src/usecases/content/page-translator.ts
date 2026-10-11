@@ -69,6 +69,13 @@ export class PageTranslator {
 		this.watcher = new DomWatcher({
 			isOwn: (node) => this.owner.has(node),
 			onTextChanged: (node) => this.onTextChanged(node),
+			onAttributesChanged: (element) => {
+				for (const seg of Array.from(this.segments())) {
+					if (!element.contains(seg.parent) && !seg.parent.contains(element)) continue;
+					if (seg.state === "done") seg.render("original");
+					this.discard(seg);
+				}
+			},
 			rescan: (roots) => {
 				for (const root of roots) this.scan(root);
 				this.prune();
@@ -275,7 +282,12 @@ export class PageTranslator {
 	private async translateBatch(batch: Segment[], lang: LanguageCode) {
 		const token = ++this.batchCounter;
 		for (const seg of batch) seg.batch = token;
-		const mine = (seg: Segment) => seg.batch === token && seg.state === "pending";
+		const mine = (seg: Segment) => {
+			if (seg.batch !== token || seg.state !== "pending") return false;
+			if (seg.isCurrentSource()) return true;
+			this.discard(seg);
+			return false;
+		};
 		const pageUrl = location.href;
 		const keyOf = (seg: Segment) => cacheKey(lang, pageUrl, seg.serialized.markup);
 

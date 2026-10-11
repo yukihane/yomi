@@ -87,25 +87,33 @@ function isExcluded(el: Element): boolean {
 }
 
 export function isAtomic(el: Element): boolean {
-	return ATOMIC_TAGS.has(el.tagName) || isExcluded(el);
+	return ATOMIC_TAGS.has(el.tagName) || excludesSubtree(el);
 }
 
-const inlineCache = new WeakMap<Element, boolean>();
+export function excludesSubtree(el: Element): boolean {
+	for (let ancestor: Element | null = el; ancestor; ancestor = ancestor.parentElement) {
+		if (SKIP_TAGS.has(ancestor.tagName) || isExcluded(ancestor)) return true;
+		const style = getComputedStyle(ancestor);
+		if (style.display === "none" || style.opacity === "0" || style.contentVisibility === "hidden") return true;
+	}
+	return false;
+}
 
 function isInline(el: Element): boolean {
-	const cached = inlineCache.get(el);
-	if (cached != null) return cached;
+	if (isHidden(el)) return false;
 	const display = INLINE_TAGS.has(el.tagName) ? getComputedStyle(el).display : null;
-	const result =
+	return (
 		(display === "inline" || display === "contents") &&
-		Array.from(el.children).every((child) => isAtomic(child) || isInline(child));
-	inlineCache.set(el, result);
-	return result;
+		Array.from(el.children).every((child) => isAtomic(child) || isInline(child))
+	);
 }
 
 /** display: contents の要素は自身のボックスを持たず checkVisibility() が false になるが、子は表示されている */
 export function isHidden(el: Element): boolean {
-	return !el.checkVisibility() && getComputedStyle(el).display !== "contents";
+	if (excludesSubtree(el)) return true;
+	const style = getComputedStyle(el);
+	if (style.visibility === "hidden" || style.visibility === "collapse") return true;
+	return !el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) && style.display !== "contents";
 }
 
 // white-space-collapse と text-wrap-mode の組み合わせによっては "preserve-breaks nowrap" のような値になる
@@ -137,9 +145,14 @@ export function collectRuns(
 	const runs: Run[] = [];
 
 	const visit = (el: Element) => {
-		if (SKIP_TAGS.has(el.tagName) || isExcluded(el)) return;
-		if (el !== document.body && isHidden(el)) {
+		if (excludesSubtree(el)) {
 			onHidden(el);
+			return;
+		}
+		if (isHidden(el)) {
+			onHidden(el);
+			// visibility は子で上書きできるため、親のテキストだけを除外する。
+			for (const child of el.children) visit(child);
 			return;
 		}
 
