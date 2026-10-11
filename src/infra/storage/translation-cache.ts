@@ -25,14 +25,43 @@ type WriteTransaction = IDBPTransaction<CacheDb, [typeof STORE], "readwrite">;
 let dbPromise: Promise<IDBPDatabase<CacheDb>> | null = null;
 
 function openDb(): Promise<IDBPDatabase<CacheDb>> {
-	dbPromise ??= openDB<CacheDb>(DB_NAME, 1, {
+	if (dbPromise != null) return dbPromise;
+	const pending = Promise.withResolvers<IDBPDatabase<CacheDb>>();
+	dbPromise = pending.promise;
+	let blocked = false;
+	let opened: IDBPDatabase<CacheDb> | undefined;
+	void openDB<CacheDb>(DB_NAME, 2, {
 		upgrade(db) {
+			// 旧APIは任意キーを書けたため、新形式に合う既存行も信頼しない
+			if (db.objectStoreNames.contains(STORE)) db.deleteObjectStore(STORE);
 			db.createObjectStore(STORE, { keyPath: "key" }).createIndex(USED_AT, USED_AT);
 		},
-	}).catch((e: unknown) => {
-		dbPromise = null;
-		throw e;
-	});
+		blocked() {
+			blocked = true;
+			pending.reject(
+				new Error("キャッシュの更新が待機中です。開いている拡張の設定画面を閉じてください。"),
+			);
+		},
+		blocking() {
+			opened?.close();
+			dbPromise = null;
+		},
+		terminated() {
+			dbPromise = null;
+		},
+	}).then(
+		(db) => {
+			opened = db;
+			if (blocked) {
+				db.close();
+				dbPromise = null;
+			} else pending.resolve(db);
+		},
+		(error: unknown) => {
+			dbPromise = null;
+			pending.reject(error);
+		},
+	);
 	return dbPromise;
 }
 
