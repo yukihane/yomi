@@ -81,9 +81,10 @@ test.each([true, false])("IDトークン署名の正当性 %s をブラウザー
 			)
 			.toMatchObject(expected);
 		expect(
-			await worker.evaluate(async () =>
-				Object.hasOwn(await chrome.storage.local.get("credentials"), "credentials"),
-			),
+			await worker.evaluate(async () => {
+				const values = await chrome.storage.local.get("credentials");
+				return Object.hasOwn(values, "credentials");
+			}),
 		).toBe(valid);
 	} finally {
 		await ext.context.close();
