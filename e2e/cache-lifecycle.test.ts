@@ -130,3 +130,80 @@ test("期限切れの行を返さず削除し、有効化後の行だけを再�
 		await ext.context.close();
 	}
 });
+
+type QueuedFetch = typeof globalThis & { __started: number; __releaseAll: () => void };
+test("キャッシュ消去で待機バッチとDOM監視を停止し、明示的な再開まで保存しない", async () => {
+	const ext = await launchExtension();
+	try {
+		await enableCache(ext);
+		const options = await ext.context.newPage();
+		await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
+		const worker = ext.context.serviceWorkers()[0]!;
+		await worker.evaluate(() => {
+			const original = globalThis.fetch;
+			const state = globalThis as QueuedFetch;
+			state.__started = 0;
+			const gate = new Promise<void>((resolve) => {
+				state.__releaseAll = resolve;
+			});
+			globalThis.fetch = async (url, init) => {
+				const target = url instanceof Request ? url.url : String(url);
+				if (target.endsWith("/responses")) {
+					state.__started++;
+					await gate;
+					if (init?.signal?.aborted === true) throw new Error("通信が中断されました");
+				}
+				return await original(url, init);
+			};
+		});
+		const page = await ext.openTestPage();
+		await page.evaluate(() => {
+			document.body.replaceChildren(
+				...Array.from({ length: 200 }, (_, i) => {
+					const p = document.createElement("p");
+					p.textContent = `Paragraph number ${i}.`;
+					return p;
+				}),
+			);
+		});
+		await page.bringToFront();
+		await ext.sendToTab({ type: "page:translate" });
+		await expect.poll(() => worker.evaluate(() => (globalThis as QueuedFetch).__started)).toBe(4);
+		expect(await ext.sendToTab({ type: "page:getState" })).toMatchObject({
+			active: true,
+			busy: 200,
+		});
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:clear" })),
+		).toMatchObject({ ok: true });
+		await worker.evaluate(() => (globalThis as QueuedFetch).__releaseAll());
+		await expect
+			.poll(() => ext.sendToTab({ type: "page:getState" }))
+			.toMatchObject({ active: false, busy: 0 });
+		await page.evaluate(async () => {
+			const p = document.createElement("p");
+			p.id = "after-clear";
+			p.textContent = "New paragraph after clearing.";
+			document.body.append(p);
+			await new Promise<void>((resolve) => {
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => resolve());
+				});
+			});
+		});
+		expect(await worker.evaluate(() => (globalThis as QueuedFetch).__started)).toBe(4);
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+		).toMatchObject({ ok: true, value: { count: 0 } });
+		await ext.sendToTab({ type: "page:translate" });
+		await expect.poll(() => page.textContent("#after-clear")).toContain("JA:");
+		await expect
+			.poll(() => ext.sendToTab({ type: "page:getState" }))
+			.toMatchObject({ busy: 0, done: 201 });
+		expect(
+			await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+		).toMatchObject({ ok: true, value: { count: 201 } });
+	} finally {
+		await ext.context.close();
+	}
+});

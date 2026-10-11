@@ -1,3 +1,4 @@
+import { TranslateFailure } from "@/domain/failure";
 import { protectAuthStorage } from "@/infra/storage/auth-access";
 import { cachePolicyItem } from "@/infra/storage/cache-policy";
 import { countTranslations, rotateCache } from "@/infra/storage/translation-cache";
@@ -8,7 +9,12 @@ let operations: Promise<unknown> = Promise.resolve();
 let paused = 0;
 export function pauseTranslations(): () => void {
 	paused++;
-	barrier.abort();
+	barrier.abort(
+		new TranslateFailure(
+			"translation_stopped",
+			"保存設定または認証状態の変更により翻訳を停止しました。再開するには、もう一度翻訳してください。",
+		),
+	);
 	barrier = new AbortController();
 	return () => {
 		paused--;
@@ -24,7 +30,11 @@ export function initializeCache(): Promise<void> {
 	return ready;
 }
 export async function cacheSession(signal: AbortSignal, incognito: boolean) {
-	if (paused > 0) throw new Error("認証状態を変更しています。完了後に再度翻訳してください。");
+	if (paused > 0)
+		throw new TranslateFailure(
+			"translation_stopped",
+			"認証状態を変更しています。完了後に再度翻訳してください。",
+		);
 	const current = barrier;
 	const combined = AbortSignal.any([signal, current.signal]);
 	await operations.catch(() => {});
@@ -38,7 +48,12 @@ export async function cacheSession(signal: AbortSignal, incognito: boolean) {
 	};
 }
 async function changeCache(enabled?: boolean): Promise<void> {
-	barrier.abort();
+	barrier.abort(
+		new TranslateFailure(
+			"translation_stopped",
+			"保存設定または認証状態の変更により翻訳を停止しました。再開するには、もう一度翻訳してください。",
+		),
+	);
 	barrier = new AbortController();
 	const operation = async () => {
 		await initializeCache().catch(() => {});
