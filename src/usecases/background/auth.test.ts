@@ -238,12 +238,30 @@ describe("getAccessToken", () => {
 });
 
 describe("signOut", () => {
+	it("資格情報がなければ失効通信を行わない", async () => {
+		const auth = await load();
+		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "not_needed" });
+		expect(endpoint.revokeRefreshToken).not.toHaveBeenCalled();
+	});
+
+	it("失効の応答を待っている間も資格情報は消えている", async () => {
+		const auth = await load();
+		await auth.credentialsItem.setValue(credentials());
+		const response = deferred<void>();
+		endpoint.revokeRefreshToken.mockReturnValue(response.promise);
+		const result = auth.signOut();
+		await vi.waitFor(() => expect(endpoint.revokeRefreshToken).toHaveBeenCalled());
+		expect(await auth.credentialsItem.getValue()).toBeNull();
+		response.resolve();
+		await expect(result).resolves.toEqual({ localCleared: true, remote: "revoked" });
+	});
+
 	it("資格情報を消し、refresh token を revoke する", async () => {
 		const auth = await load();
 		await auth.credentialsItem.setValue(credentials());
 		endpoint.revokeRefreshToken.mockResolvedValue(undefined);
 
-		await auth.signOut();
+		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "revoked" });
 
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 		expect(endpoint.revokeRefreshToken).toHaveBeenCalledWith("refresh-1", "oaiapp_1");
@@ -255,7 +273,7 @@ describe("signOut", () => {
 		await auth.credentialsItem.setValue(credentials());
 		endpoint.revokeRefreshToken.mockRejectedValue(new Error("network"));
 
-		await expect(auth.signOut()).resolves.toBeUndefined();
+		await expect(auth.signOut()).resolves.toEqual({ localCleared: true, remote: "failed" });
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 	});
 
