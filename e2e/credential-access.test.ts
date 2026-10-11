@@ -1,6 +1,9 @@
 import { expect, test } from "vitest";
+import type { Browser } from "wxt/browser";
 
 import { launchExtension } from "./fixtures";
+
+declare const chrome: typeof Browser;
 
 test("content script から資格情報を読み書きできない", async () => {
 	const ext = await launchExtension();
@@ -29,6 +32,29 @@ test("content script から資格情報を読み書きできない", async () =>
 		});
 		expect(write.exceptionDetails).toBeUndefined();
 		expect(write.result.value).toBe(false);
+		await cdp.send("Runtime.evaluate", {
+			contextId,
+			expression: `globalThis.auditBarrier = new Promise(resolve => {
+				let credentialChanges = 0;
+				chrome.storage.onChanged.addListener((changes, area) => {
+					if (area === "local" && changes.credentials) credentialChanges++;
+					if (area === "sync" && changes.auditBarrier) resolve(credentialChanges);
+				});
+			}); void 0`,
+		});
+		await ext.context.serviceWorkers()[0]!.evaluate(async () => {
+			const stored = await chrome.storage.local.get("credentials");
+			await chrome.storage.local.set({ credentials: { ...stored["credentials"], refreshToken: "updated-dummy-refresh" } });
+			await chrome.storage.sync.set({ auditBarrier: true });
+		});
+		const changes = await cdp.send("Runtime.evaluate", {
+			contextId,
+			expression: "globalThis.auditBarrier",
+			awaitPromise: true,
+			returnByValue: true,
+		});
+		expect(changes.exceptionDetails).toBeUndefined();
+		expect(changes.result.value).toBe(0);
 		const options = await ext.context.newPage();
 		await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
 		await expect.poll(() => options.getByText("tester@example.com").count()).toBe(1);
