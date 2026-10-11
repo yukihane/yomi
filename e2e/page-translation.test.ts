@@ -27,10 +27,13 @@ beforeAll(async () => {
 	await ext.sendToTab({ type: "page:translate" });
 	await page.waitForFunction(() => document.querySelector("#li2")?.textContent.includes("JA:"));
 	// expect.poll は beforeAll 内で使えない。
-	await vi.waitFor(async () => {
+	await vi.waitFor(
+		async () => {
 			const state = await ext.sendToTab<{ busy: number }>({ type: "page:getState" });
-			expect(state.busy).toBe(0);
-		}, { timeout: 10000 });
+			if (state.busy !== 0) throw new Error("ページ翻訳がまだ完了していません");
+		},
+		{ timeout: 10000 },
+	);
 	await screenshot(page, "page-translated");
 });
 
