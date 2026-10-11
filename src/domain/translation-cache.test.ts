@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LanguageCode } from "./languages";
-import { cacheKey as buildCacheKey } from "./translation-cache";
+import { cacheKey as buildCacheKey, cacheExpired, CACHE_TTL_MS } from "./translation-cache";
 
 const options = { model: "model", reasoningEffort: "low", fastMode: false, instructions: "prompt" };
 const cacheKey = (lang: LanguageCode, url: string, markup: string) =>
@@ -37,4 +37,17 @@ describe("cacheKey", () => {
 		expect(cacheKey("en", "https://a.example/doc", "x")).not.toBe(base);
 		expect(cacheKey("ja", "https://a.example/doc", "y")).not.toBe(base);
 	});
+});
+
+it("TTLは書き込みから7日で、読み取り時刻では延長しない", () => {
+	const row = {
+		key: "key",
+		translation: "訳",
+		createdAt: 100,
+		expiresAt: 100 + CACHE_TTL_MS,
+		usedAt: 100 + CACHE_TTL_MS - 1,
+	};
+	expect(cacheExpired(row, row.expiresAt - 1)).toBe(false);
+	expect(cacheExpired(row, row.expiresAt)).toBe(true);
+	expect(cacheExpired(row, 99)).toBe(true);
 });

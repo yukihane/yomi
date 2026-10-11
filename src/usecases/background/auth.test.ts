@@ -10,7 +10,10 @@ import type { Credentials } from "@/infra/storage/auth";
 const endpoint = vi.hoisted(() => ({ postToken: vi.fn(), revokeRefreshToken: vi.fn() }));
 vi.mock("@/infra/oauth/token-endpoint", () => endpoint);
 
-vi.mock("./cache", () => ({ clearCache: vi.fn(async () => {}) }));
+vi.mock("./cache", () => ({
+	clearCache: vi.fn(async () => {}),
+	pauseTranslations: vi.fn(() => () => {}),
+}));
 
 const MINUTE = 60 * 1000;
 

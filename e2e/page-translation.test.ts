@@ -1,7 +1,7 @@
 import type { Page } from "playwright-core";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 
-import { launchExtension, screenshot, takesScreenshots } from "./fixtures";
+import { enableCache, launchExtension, screenshot, takesScreenshots } from "./fixtures";
 import type { Extension } from "./fixtures";
 
 type LinkHolder = Window & { __link?: Element | null };
@@ -14,6 +14,7 @@ const text = (sel: string) => page.textContent(sel);
 
 beforeAll(async () => {
 	ext = await launchExtension();
+	await enableCache(ext);
 	return () => ext.context.close();
 });
 
