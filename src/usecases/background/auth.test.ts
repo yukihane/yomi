@@ -71,7 +71,11 @@ beforeEach(() => {
 describe("認証ストレージの保護", () => {
 	it("アクセス制限の完了まで資格情報を読み取らず、同時操作も初期化を共有する", async () => {
 		const ready = deferred<void>();
-		const local = vi.spyOn(fakeBrowser.storage.local, "setAccessLevel").mockImplementation(async () => await ready.promise);
+		// モックの推論が callback 版の void を選ぶため、使用する Promise 版に絞る。
+		const localStorage = fakeBrowser.storage.local as {
+			setAccessLevel: (options: { accessLevel: string }) => Promise<void>;
+		};
+		const local = vi.spyOn(localStorage, "setAccessLevel").mockReturnValue(ready.promise);
 		const session = vi.spyOn(fakeBrowser.storage.session, "setAccessLevel");
 		const auth = await load();
 		await auth.credentialsItem.setValue(credentials());
