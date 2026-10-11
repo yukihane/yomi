@@ -1,6 +1,5 @@
 import { TranslateFailure } from "@/domain/failure";
 import { LANGUAGES } from "@/domain/languages";
-import { selectionInstructions } from "@/domain/prompts";
 import type { Settings } from "@/domain/settings";
 import { currentSelection } from "@/infra/dom/selection";
 import { requestTranslation, StreamCancelled } from "@/infra/messaging/translation-stream";
@@ -82,7 +81,7 @@ export class SelectionTranslator {
 
 		let result = "";
 		const stream = requestTranslation(
-			{ instructions: selectionInstructions(this.hooks.getSettings().targetLang), input: source },
+			{ kind: "selection", targetLang: this.hooks.getSettings().targetLang, text: source },
 			(delta) => {
 				result += delta;
 				panel.update({ status: "translating", text: result });

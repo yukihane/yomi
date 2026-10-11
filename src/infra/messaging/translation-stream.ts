@@ -16,6 +16,7 @@ export class StreamCancelled extends Error {}
 export function requestTranslation(
 	req: TranslateRequest,
 	onDelta: (text: string) => void,
+	onSegment: (index: number, markup: string) => void = () => {},
 ): StreamHandle {
 	const { promise: done, resolve, reject } = Promise.withResolvers<void>();
 	let port: Browser.runtime.Port;
@@ -50,6 +51,9 @@ export function requestTranslation(
 		switch (event.type) {
 			case "delta":
 				onDelta(event.text);
+				break;
+			case "segment":
+				onSegment(event.index, event.markup);
 				break;
 			case "done":
 				finish(resolve);

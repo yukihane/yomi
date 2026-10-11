@@ -34,17 +34,15 @@ function handlers(): BackgroundHandlers {
 		"open:options": vi.fn().mockResolvedValue(undefined),
 		"open:usage": vi.fn().mockResolvedValue(undefined),
 		"open:shortcuts": vi.fn().mockResolvedValue(undefined),
-		"cache:lookup": vi.fn().mockResolvedValue([]),
-		"cache:store": vi.fn().mockResolvedValue(undefined),
 	};
 }
 
-async function request(sender: unknown, type: string) {
+async function request(sender: unknown, type: string, params?: unknown) {
 	const api = handlers();
 	const listener = vi.spyOn(fakeBrowser.runtime.onMessage, "addListener");
 	serveBackgroundApi(api, (error) => toTranslateFailure(error).serialize());
 	const response = vi.fn<(value: unknown) => void>();
-	listener.mock.calls[0]![0]({ type }, sender as Browser.runtime.MessageSender, response);
+	listener.mock.calls[0]![0]({ type, params }, sender as Browser.runtime.MessageSender, response);
 	await vi.waitFor(() => expect(response).toHaveBeenCalledOnce());
 	return { api, value: response.mock.calls[0]![0] };
 }
@@ -93,6 +91,14 @@ it.each([
 it("content script から固定の設定画面を開ける", async () => {
 	const { value } = await request(contentSender(), "open:options");
 	expect(value).toMatchObject({ ok: true });
+});
+
+it.each([
+	["cache:lookup", { keys: ["other-site-key"] }],
+	["cache:store", { entries: [{ key: "other-site-key", translation: "poison" }] }],
+])("旧%s APIから任意キーにアクセスできない", async (type, params) => {
+	const { value } = await request(contentSender(), type, params);
+	expect(value).toMatchObject({ ok: false });
 });
 
 it("拡張画面から翻訳ポートを使えない", () => {

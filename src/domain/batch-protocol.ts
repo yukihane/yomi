@@ -5,6 +5,28 @@ export function encodeBatch(markups: readonly string[]): string {
 	return markups.map((markup, i) => `<seg id="${i + 1}">${markup}</seg>`).join("\n");
 }
 
+export function decodeCompleteBatch(output: string, count: number): string[] {
+	const results = new Map<number, string>();
+	const pattern = new RegExp(SEG_PATTERN.source, SEG_PATTERN.flags);
+	let cursor = 0;
+	for (const match of output.matchAll(pattern)) {
+		const index = Number(match[1]) - 1;
+		if (
+			output.slice(cursor, match.index).trim() !== "" ||
+			!Number.isSafeInteger(index) ||
+			index < 0 ||
+			index >= count ||
+			results.has(index)
+		)
+			throw new Error("翻訳結果のセグメントが不正です");
+		results.set(index, match[2]!);
+		cursor = match.index + match[0].length;
+	}
+	if (output.slice(cursor).trim() !== "" || results.size !== count)
+		throw new Error("翻訳結果のセグメントが不足または不正です");
+	return Array.from({ length: count }, (_, index) => results.get(index)!);
+}
+
 /** 範囲外や重複の検証は呼び出し側で行う */
 export function createBatchDecoder(
 	onSegment: (index: number, markup: string) => void,

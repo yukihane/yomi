@@ -43,10 +43,32 @@ async function hashKey(key: string): Promise<string> {
 }
 
 /** 途中の要求が失敗しても tx.done の reject を未処理にしない */
-async function write<T>(run: (tx: WriteTransaction) => Promise<T>): Promise<T> {
+async function write<T>(
+	run: (tx: WriteTransaction) => Promise<T>,
+	signal?: AbortSignal,
+): Promise<T> {
+	signal?.throwIfAborted();
 	const tx = (await openDb()).transaction(STORE, "readwrite");
-	const [result] = await Promise.all([run(tx), tx.done]);
-	return result;
+	const abort = () => {
+		try {
+			tx.abort();
+		} catch {}
+	};
+	signal?.addEventListener("abort", abort, { once: true });
+	try {
+		const done = tx.done;
+		const result = async () => {
+			if (signal?.aborted === true) {
+				abort();
+				signal.throwIfAborted();
+			}
+			return await run(tx);
+		};
+		const [value] = await Promise.all([result(), done]);
+		return value;
+	} finally {
+		signal?.removeEventListener("abort", abort);
+	}
 }
 
 export async function lookupTranslations(keys: string[]): Promise<(string | null)[]> {
@@ -65,7 +87,10 @@ export async function lookupTranslations(keys: string[]): Promise<(string | null
 	});
 }
 
-export async function storeTranslations(entries: CachedTranslation[]): Promise<void> {
+export async function storeTranslations(
+	entries: CachedTranslation[],
+	signal?: AbortSignal,
+): Promise<void> {
 	const rows = await Promise.all(
 		entries.map(async ({ key, translation }) => ({ key: await hashKey(key), translation })),
 	);
@@ -77,7 +102,7 @@ export async function storeTranslations(entries: CachedTranslation[]): Promise<v
 			await cursor.delete();
 			cursor = --excess > 0 ? await cursor.continue() : null;
 		}
-	});
+	}, signal);
 }
 
 export async function countTranslations(): Promise<number> {

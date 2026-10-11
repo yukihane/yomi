@@ -2,8 +2,10 @@ import * as v from "valibot";
 
 import { browser } from "#imports";
 import type { SerializedFailure } from "@/domain/failure";
+import { TranslateFailure } from "@/domain/failure";
 import { authorizeMessage } from "@/domain/message-caller";
 import type { MessageCaller } from "@/domain/message-caller";
+import type { TranslationOutput } from "@/domain/translation-request";
 
 import { getMessageCaller } from "./caller";
 import {
@@ -58,13 +60,14 @@ function call<K extends BackgroundMethod>(
 	params: unknown,
 	caller: MessageCaller,
 ) {
-	return handlers[type](v.parse(BACKGROUND_API[type].params, params), caller);
+	v.parse(BACKGROUND_API[type].params, params);
+	return handlers[type](undefined, caller);
 }
 
 export type TranslateHandler = (
 	req: TranslateRequest,
 	signal: AbortSignal,
-	onDelta: (text: string) => void,
+	onOutput: (event: TranslationOutput) => void,
 	caller: MessageCaller,
 ) => Promise<void>;
 
@@ -80,8 +83,15 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 			return;
 		}
 		const controller = new AbortController();
+		let started = false;
 		port.onDisconnect.addListener(() => controller.abort());
 		port.onMessage.addListener((raw: unknown) => {
+			if (started || controller.signal.aborted) {
+				controller.abort();
+				port.disconnect();
+				return;
+			}
+			started = true;
 			const post = (event: TranslateEvent) => {
 				if (!controller.signal.aborted) port.postMessage(event);
 			};
@@ -89,13 +99,15 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 				() => void browser.runtime.getPlatformInfo(),
 				KEEP_ALIVE_INTERVAL_MS,
 			);
-			const run = async () =>
-				await translate(
-					v.parse(TranslateRequestSchema, raw),
-					controller.signal,
-					(text) => post({ type: "delta", text }),
-					caller,
-				);
+			const run = async () => {
+				const parsed = v.safeParse(TranslateRequestSchema, raw);
+				if (!parsed.success)
+					throw new TranslateFailure(
+						"extension_reloaded",
+						"翻訳要求の形式が変わりました。ページを再読み込みしてください。",
+					);
+				await translate(parsed.output, controller.signal, post, caller);
+			};
 			void run()
 				.then(
 					() => post({ type: "done" }),
