@@ -5,6 +5,7 @@ WXT + Solid + TypeScript の Chrome 拡張。機能は README を参照する。
 ## 開発
 
 Node.js と pnpm のバージョンは `mise.toml` で固定している。
+`package.json` の `devEngines.runtime` と `packageManager` にも同じバージョンを指定している。pnpm を導入済みなら、`mise install` を省略して `pnpm install` で指定の Node.js を取得し、`pnpm dev` などを実行できる。バージョンを更新するときは両方の指定を揃える。
 
 ```sh
 mise install
