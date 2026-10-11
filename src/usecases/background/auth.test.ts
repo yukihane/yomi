@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 
 import type { TranslateFailure } from "@/domain/failure";
@@ -45,11 +46,16 @@ function tokens(overrides: Partial<TokenResponse> = {}): TokenResponse {
 	};
 }
 
-function idToken(claims: Record<string, unknown>): string {
-	const payload = new TextEncoder()
-		.encode(JSON.stringify(claims))
-		.toBase64({ alphabet: "base64url", omitPadding: true });
-	return `header.${payload}.signature`;
+const keyPair = generateKeyPair("RS256");
+
+async function idToken(claims: Record<string, unknown>): Promise<string> {
+	return await new SignJWT({ sub: "subject-1", ...claims })
+		.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+		.setIssuer("https://auth.openai.com")
+		.setAudience("oaiapp_new")
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign((await keyPair).privateKey);
 }
 
 function deferred<T>() {
@@ -60,12 +66,23 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 
-beforeEach(() => {
+afterEach(() => vi.unstubAllGlobals());
+
+beforeEach(async () => {
 	fakeBrowser.reset();
 	vi.spyOn(fakeBrowser.storage.local, "setAccessLevel").mockResolvedValue();
 	vi.spyOn(fakeBrowser.storage.session, "setAccessLevel").mockResolvedValue();
 	endpoint.postToken.mockReset();
 	endpoint.revokeRefreshToken.mockReset();
+	const key = await exportJWK((await keyPair).publicKey);
+	vi.stubGlobal(
+		"fetch",
+		vi
+			.fn()
+			.mockResolvedValue(
+				new Response(JSON.stringify({ keys: [{ ...key, kid: "test-key", alg: "RS256" }] })),
+			),
+	);
 });
 
 describe("認証ストレージの保護", () => {
@@ -115,6 +132,35 @@ describe("認証ストレージの保護", () => {
 });
 
 describe("getAccessToken", () => {
+	it("更新応答のIDトークンを検証してから保存する", async () => {
+		const auth = await load();
+		await auth.credentialsItem.setValue(
+			credentials({ clientId: "oaiapp_new", subject: "subject-1", expiresAt: 0 }),
+		);
+		endpoint.postToken.mockResolvedValue(
+			tokens({ idToken: await idToken({ email: "verified@example.invalid" }) }),
+		);
+		await expect(auth.getAccessToken()).resolves.toBe("access-2");
+		expect(await auth.credentialsItem.getValue()).toMatchObject({
+			subject: "subject-1",
+			email: "verified@example.invalid",
+		});
+	});
+
+	it.each(["signature", "subject"])("不正な %s の更新応答を保存しない", async (mode) => {
+		const auth = await load();
+		const saved = credentials({ clientId: "oaiapp_new", subject: "subject-1", expiresAt: 0 });
+		await auth.credentialsItem.setValue(saved);
+		endpoint.postToken.mockResolvedValue(
+			tokens({
+				idToken:
+					mode === "signature" ? "invalid-token" : await idToken({ sub: "different-subject" }),
+			}),
+		);
+		await expect(auth.getAccessToken()).rejects.toThrow("再度サインインしてください");
+		expect(await auth.credentialsItem.getValue()).toEqual(saved);
+	});
+
 	it("期限まで余裕があれば refresh せずに保存済みの access token を返す", async () => {
 		const auth = await load();
 		await auth.credentialsItem.setValue(credentials());
@@ -314,7 +360,7 @@ describe("handleTabUpdated", () => {
 		const auth = await load();
 		await auth.signInItem.setValue(pending);
 		endpoint.postToken.mockResolvedValue(
-			tokens({ idToken: idToken({ nonce: "nonce-1", email: "user@example.com" }) }),
+			tokens({ idToken: await idToken({ nonce: "nonce-1", email: "user@example.com" }) }),
 		);
 
 		const handled = await auth.handleTabUpdated(
@@ -397,25 +443,27 @@ describe("handleTabUpdated", () => {
 		expect(await auth.credentialsItem.getValue()).toBeNull();
 	});
 
-	it.each([
-		[
-			"ChatGPT サブスクリプションのスコープがない",
-			tokens({ scope: "openid email", idToken: idToken({ nonce: "nonce-1" }) }),
-		],
-		["ID トークンの nonce が一致しない", tokens({ idToken: idToken({ nonce: "other" }) })],
-		["ID トークンがない", tokens({ idToken: null })],
-	])("%s応答なら資格情報を保存せず、サインインを失敗にする", async (_, response) => {
-		const auth = await load();
-		await auth.signInItem.setValue(pending);
-		endpoint.postToken.mockResolvedValue(response);
+	it.each(["スコープがない", "nonce が一致しない", "ID トークンがない", "署名が不正"])(
+		"%s応答なら資格情報を保存せず、サインインを失敗にする",
+		async (reason) => {
+			const auth = await load();
+			await auth.signInItem.setValue(pending);
+			let jwt = await idToken({ nonce: reason === "nonce が一致しない" ? "other" : "nonce-1" });
+			if (reason === "署名が不正") jwt = `${jwt.slice(0, jwt.lastIndexOf(".") + 1)}invalid`;
+			const response = tokens({
+				scope: reason === "スコープがない" ? "openid email" : tokens().scope,
+				idToken: reason === "ID トークンがない" ? null : jwt,
+			});
+			endpoint.postToken.mockResolvedValue(response);
 
-		const handled = await auth.handleTabUpdated(
-			TAB_ID,
-			callback({ code: "code-1", state: "state-1", client_id: "oaiapp_new" }),
-		);
+			const handled = await auth.handleTabUpdated(
+				TAB_ID,
+				callback({ code: "code-1", state: "state-1", client_id: "oaiapp_new" }),
+			);
 
-		expect(handled).toBe(false);
-		expect(await auth.signInItem.getValue()).toMatchObject({ status: "failed" });
-		expect(await auth.credentialsItem.getValue()).toBeNull();
-	});
+			expect(handled).toBe(false);
+			expect(await auth.signInItem.getValue()).toMatchObject({ status: "failed" });
+			expect(await auth.credentialsItem.getValue()).toBeNull();
+		},
+	);
 });
