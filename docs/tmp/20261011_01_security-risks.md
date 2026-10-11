@@ -10,12 +10,12 @@
 
 確認したアプリケーションコードでは、作者のサーバーへの隠れた送信や、認証情報を第三者へ転送する実装は見つからなかった。一方、意図しない文章の外部送信と、認証情報・保存済み訳文の保護に問題がある。以前の報告の主要3点は、このブランチでも再現した。さらに、キャッシュ API の呼び出し元の分離不足を確認した。
 
-| ID | 修正優先度 | 指摘 | 今回の確認 |
-| --- | --- | --- | --- |
-| S1 | 高 | 非表示文と翻訳除外領域内の動的追加が送信対象になる | 現在のビルドで再現 |
-| S2 | 中 | content script から更新用トークンを読める | ダミートークンで再現 |
-| S3 | 中 | 訳文の保存期限がなく、サインアウト後にも残る | 7件中7件が残存 |
-| S4 | 中 | 別サイトのキャッシュを content script から参照できる | 既知のキーを使って再現 |
+| ID  | 修正優先度 | 指摘                                                 | 今回の確認             |
+| --- | ---------- | ---------------------------------------------------- | ---------------------- |
+| S1  | 高         | 非表示文と翻訳除外領域内の動的追加が送信対象になる   | 現在のビルドで再現     |
+| S2  | 中         | content script から更新用トークンを読める            | ダミートークンで再現   |
+| S3  | 中         | 訳文の保存期限がなく、サインアウト後にも残る         | 7件中7件が残存         |
+| S4  | 中         | 別サイトのキャッシュを content script から参照できる | 既知のキーを使って再現 |
 
 優先度は今回の修正順の目安であり、CVSS 評価ではない。実際の情報漏洩が起きたことを示す調査ではない。S2・S4 の検証は content script の権限を調べたもので、通常の Web ページからその権限を奪う攻撃を再現したものではない。
 
@@ -23,17 +23,17 @@ S1 の修正までは、機密情報のあるページでページ全体の翻�
 
 ## データの送信先・保存先
 
-| データ | 扱いと根拠 |
-| --- | --- |
-| ページ本文 | 翻訳開始後、OpenAI Responses API に送信。[page-translator.ts](../../src/usecases/content/page-translator.ts) 277–305行、[client.ts](../../src/infra/openai/client.ts) 39行以降 |
-| タイトル・説明文 | ページ翻訳時に文脈として最大200文字・300文字を送信。本文の除外指定とは別に取得。[prompts.ts](../../src/domain/prompts.ts) 9–31行 |
+| データ                 | 扱いと根拠                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ページ本文             | 翻訳開始後、OpenAI Responses API に送信。[page-translator.ts](../../src/usecases/content/page-translator.ts) 277–305行、[client.ts](../../src/infra/openai/client.ts) 39行以降                         |
+| タイトル・説明文       | ページ翻訳時に文脈として最大200文字・300文字を送信。本文の除外指定とは別に取得。[prompts.ts](../../src/domain/prompts.ts) 9–31行                                                                       |
 | 画面外・追加された文章 | 画面内を優先するが画面外も処理する。翻訳開始後は DOM 変更を監視し、停止するまで追加分も対象になる。[page-translator.ts](../../src/usecases/content/page-translator.ts) の `start`、`takeBatch`、`scan` |
-| 選択翻訳 | 最大8,000文字を送信。この処理では永続キャッシュへ保存しない。[selection-translator.ts](../../src/usecases/content/selection-translator.ts) 72行以降 |
-| OAuth 情報 | `auth.openai.com` と認可・トークン取得・失効を通信。アクセストークン、更新用トークン、ID トークン、メールアドレスを `storage.local` に保存。[auth.ts](../../src/infra/storage/auth.ts) 5–20行 |
-| インストール識別子 | UUID をローカル保存し、認可時に `ext_agent_host_id` として送信。[oauth.ts](../../src/domain/oauth.ts) 28–43行 |
-| 訳文 | 拡張の IndexedDB に平文相当で保存。キーだけ SHA-256 化し、最大50,000件を保持。[translation-cache.ts](../../src/infra/storage/translation-cache.ts) 40–81行 |
-| 設定 | モデル・言語・表示設定を `storage.sync` に保存。[settings.ts](../../src/infra/storage/settings.ts) 9行 |
-| ページ URL | キャッシュキー生成に origin と pathname を使う。独立した項目として翻訳 API に送る実装はない。本文などに含まれれば送信される。[translation-cache.ts](../../src/domain/translation-cache.ts) 14–18行 |
+| 選択翻訳               | 最大8,000文字を送信。この処理では永続キャッシュへ保存しない。[selection-translator.ts](../../src/usecases/content/selection-translator.ts) 72行以降                                                    |
+| OAuth 情報             | `auth.openai.com` と認可・トークン取得・失効を通信。アクセストークン、更新用トークン、ID トークン、メールアドレスを `storage.local` に保存。[auth.ts](../../src/infra/storage/auth.ts) 5–20行          |
+| インストール識別子     | UUID をローカル保存し、認可時に `ext_agent_host_id` として送信。[oauth.ts](../../src/domain/oauth.ts) 28–43行                                                                                          |
+| 訳文                   | 拡張の IndexedDB に平文相当で保存。キーだけ SHA-256 化し、最大50,000件を保持。[translation-cache.ts](../../src/infra/storage/translation-cache.ts) 40–81行                                             |
+| 設定                   | モデル・言語・表示設定を `storage.sync` に保存。[settings.ts](../../src/infra/storage/settings.ts) 9行                                                                                                 |
+| ページ URL             | キャッシュキー生成に origin と pathname を使う。独立した項目として翻訳 API に送る実装はない。本文などに含まれれば送信される。[translation-cache.ts](../../src/domain/translation-cache.ts) 14–18行     |
 
 アプリケーションの主な外部通信先は `auth.openai.com` と `api.openai.com`。使用量画面として `chatgpt.com/settings/usage` を開く。`127.0.0.1:1455/callback` は OAuth の loopback リダイレクト先。設定で任意の API 送信先へ切り替える実装は見つからなかった。
 
@@ -110,16 +110,16 @@ Chrome の `storage.local` は既定で content script に公開される。認�
 
 ## 再現方法と証跡
 
-- [再現スクリプト](20261011_02_security-probe.mjs)
+- [再現コード](20261011_02_security-probe.md)
 - [今回の再現結果 JSON](20261011_03_security-probe-result.json)
 
-PowerShell でリポジトリー直下から次を実行する。スクリプトは新しい専用プロファイルを `.output/security-profile-*` に作る。ブラウザと拡張以外の実アカウント・既存プロファイルは使用しない。翻訳・モデル・失効 API は service worker 内でモックし、それ以外の同 worker の fetch は例外にする。テストページは Playwright の route で供給する。
+再現コードのコードブロックを `.output/security-probe.mjs` に保存し、PowerShell でリポジトリー直下から次を実行する。スクリプトは新しい専用プロファイルを `.output/security-profile-*` に作る。実アカウント・既存のブラウザプロファイルは使用しない。翻訳・モデル・失効 API は service worker 内でモックし、それ以外の同 worker の fetch は例外にする。テストページは Playwright の route で供給する。
 
 ```powershell
 pnpm install --frozen-lockfile
 pnpm exec playwright-core install --no-shell chromium
 pnpm build
-pnpm exec node docs/tmp/20261011_02_security-probe.mjs
+pnpm exec node .output/security-probe.mjs
 ```
 
 再実行の JSON は `.output/security-probe-result.json` に出力される。同梱の証跡を自動で上書きしない。DOM 更新は条件が成立するまで待ち、固定時間後の状態には依存しない。content script の権限検証には CDP を使うため、通常の Web ページ JavaScript の攻撃手順ではない。
