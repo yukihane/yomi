@@ -95,7 +95,7 @@ export function excludesSubtree(el: Element): boolean {
 		if (SKIP_TAGS.has(ancestor.tagName) || isExcluded(ancestor)) return true;
 		if (ancestor instanceof HTMLDetailsElement && !ancestor.open && ancestor !== el) {
 			const summary = Array.from(ancestor.children).find((child) => child.tagName === "SUMMARY");
-			if (!summary?.contains(el)) return true;
+			if (summary == null || !summary.contains(el)) return true;
 		}
 		const style = getComputedStyle(ancestor);
 		if (style.display === "none" || style.opacity === "0" || style.contentVisibility === "hidden")
@@ -126,7 +126,9 @@ export function isHidden(el: Element): boolean {
 
 export function isTextHidden(node: Text): boolean {
 	const parent = node.parentElement;
-	return parent == null || isHidden(parent) || (parent instanceof HTMLDetailsElement && !parent.open);
+	return (
+		parent == null || isHidden(parent) || (parent instanceof HTMLDetailsElement && !parent.open)
+	);
 }
 
 // white-space-collapse と text-wrap-mode の組み合わせによっては "preserve-breaks nowrap" のような値になる
