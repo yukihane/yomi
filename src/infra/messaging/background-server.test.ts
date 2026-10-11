@@ -10,6 +10,7 @@ import type { BackgroundHandlers, TranslateHandler } from "./background-server";
 
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.spyOn(fakeBrowser.runtime, "getPlatformInfo").mockResolvedValue({ os: "win", arch: "x86-64" });
 	for (const event of [
 		fakeBrowser.webNavigation.onCommitted,
 		fakeBrowser.webNavigation.onHistoryStateUpdated,

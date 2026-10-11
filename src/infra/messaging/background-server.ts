@@ -153,7 +153,7 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 				if (!parsed.success) {
 					const current = typeof raw === "object" && raw != null && "kind" in raw;
 					throw new TranslateFailure(
-						current ? "other" : "extension_reloaded",
+						current ? "request_limit" : "extension_reloaded",
 						current
 							? "翻訳対象が上限を超えているか、形式が不正です。選択文・1セグメントは8,000文字、ページの1要求は20,000文字までです。"
 							: "翻訳要求の形式が変わりました。ページを再読み込みしてください。",

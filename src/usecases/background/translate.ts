@@ -57,7 +57,10 @@ export async function translate(
 						signal.throwIfAborted();
 						outputLength += text.length;
 						if (outputLength > MAX_OUTPUT_LENGTH)
-							throw new TranslateFailure("other", "翻訳結果が上限を超えたため中断しました。");
+							throw new TranslateFailure(
+								"request_limit",
+								"翻訳結果が上限を超えたため中断しました。",
+							);
 						received = true;
 						onDelta(text);
 					},

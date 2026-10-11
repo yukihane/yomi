@@ -18,7 +18,7 @@ export const limitedFetch: typeof fetch = async (input, init) => {
 				if (received > MAX_RESPONSE_BYTES) {
 					await reader.cancel();
 					controller.error(
-						new TranslateFailure("other", "APIの応答量が上限を超えたため中断しました。"),
+						new TranslateFailure("request_limit", "APIの応答量が上限を超えたため中断しました。"),
 					);
 					return;
 				}
