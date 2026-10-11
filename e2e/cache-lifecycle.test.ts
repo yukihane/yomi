@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
+import type { Browser } from "wxt/browser";
 
-import { launchExtension } from "./fixtures";
+import { enableCache, launchExtension } from "./fixtures";
 
 test("既定では訳文を保存せず、再訪問でもAPIへ要求する", async () => {
 	const ext = await launchExtension();
@@ -17,6 +18,95 @@ test("既定では訳文を保存せず、再訪問でもAPIへ要求する", as
 		await expect.poll(() => second.textContent("#far")).toContain("JA:");
 		await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toMatchObject({ busy: 0 });
 		expect((await ext.requests()).length).toBeGreaterThan(count);
+	} finally {
+		await ext.context.close();
+	}
+});
+
+declare const chrome: typeof Browser;
+type Delayed = typeof globalThis & { __waiting: boolean; __release: () => void };
+
+test.each(["cache:clear", "cache:disable", "auth:signOut"])(
+	"%s の後で遅延応答が訳文を復活させない",
+	async (action) => {
+		const ext = await launchExtension();
+		try {
+			await enableCache(ext);
+			const options = await ext.context.newPage();
+			await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
+			const worker = ext.context.serviceWorkers()[0]!;
+			await worker.evaluate(() => {
+				const original = globalThis.fetch;
+				globalThis.fetch = async (url, init) => {
+					const target = url instanceof Request ? url.url : String(url);
+					if (target.endsWith("/oauth/revoke")) return new Response(null, { status: 200 });
+					if (target.endsWith("/responses")) {
+						(globalThis as Delayed).__waiting = true;
+						await new Promise<void>((resolve) => {
+							(globalThis as Delayed).__release = resolve;
+						});
+					}
+					return await original(url, init);
+				};
+			});
+			const page = await ext.openTestPage();
+			await page.bringToFront();
+			await ext.sendToTab({ type: "page:translate" });
+			await expect.poll(() => worker.evaluate(() => (globalThis as Delayed).__waiting)).toBe(true);
+			expect(
+				await options.evaluate((type) => chrome.runtime.sendMessage({ type }), action),
+			).toMatchObject({ ok: true });
+			await worker.evaluate(() => (globalThis as Delayed).__release());
+			await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toMatchObject({ busy: 0 });
+			expect(
+				await options.evaluate(() => chrome.runtime.sendMessage({ type: "cache:status" })),
+			).toMatchObject({ ok: true, value: { count: 0 } });
+		} finally {
+			await ext.context.close();
+		}
+	},
+);
+
+test("期限切れの行を返さず削除し、有効化後の行だけを再利用する", async () => {
+	const ext = await launchExtension();
+	try {
+		await enableCache(ext);
+		const translatePage = async () => {
+			const page = await ext.openTestPage();
+			await page.bringToFront();
+			await ext.sendToTab({ type: "page:translate" });
+			await expect.poll(() => page.textContent("#far")).toContain("JA:");
+			await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toMatchObject({ busy: 0 });
+		};
+		await translatePage();
+		const initial = (await ext.requests()).length;
+		await translatePage();
+		expect((await ext.requests()).length).toBe(initial);
+		await ext.context.serviceWorkers()[0]!.evaluate(async () => {
+			const db = await new Promise<IDBDatabase>((resolve) => {
+				const req = indexedDB.open("translation-cache", 3);
+				req.onsuccess = () => resolve(req.result);
+			});
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const tx = db.transaction("entries", "readwrite");
+					const req = tx.objectStore("entries").openCursor();
+					req.onsuccess = () => {
+						const cursor = req.result;
+						if (!cursor) return;
+						const row = cursor.value as Record<string, unknown>;
+						cursor.update({ ...row, createdAt: Date.now() - 7 * 86400000, expiresAt: Date.now() });
+						cursor.continue();
+					};
+					tx.oncomplete = () => resolve();
+					tx.addEventListener("abort", () => reject(new Error("DB操作失敗")), { once: true });
+				});
+			} finally {
+				db.close();
+			}
+		});
+		await translatePage();
+		expect((await ext.requests()).length).toBeGreaterThan(initial);
 	} finally {
 		await ext.context.close();
 	}
