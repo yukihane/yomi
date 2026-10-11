@@ -33,7 +33,7 @@ test.each([200, 500])(
 				await worker.evaluate(
 					async () => (await chrome.storage.local.get("credentials"))["credentials"],
 				),
-			).toBeNull();
+			).toBeUndefined();
 		} finally {
 			await ext.context.close();
 		}
