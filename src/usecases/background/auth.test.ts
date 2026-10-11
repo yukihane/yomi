@@ -62,8 +62,56 @@ function deferred<T>() {
 
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.spyOn(fakeBrowser.storage.local, "setAccessLevel").mockResolvedValue();
+	vi.spyOn(fakeBrowser.storage.session, "setAccessLevel").mockResolvedValue();
 	endpoint.postToken.mockReset();
 	endpoint.revokeRefreshToken.mockReset();
+});
+
+describe("認証ストレージの保護", () => {
+	it("アクセス制限の完了まで資格情報を読み取らず、同時操作も初期化を共有する", async () => {
+		const ready = deferred<void>();
+		// モックの推論が callback 版の void を選ぶため、使用する Promise 版に絞る。
+		const localStorage = fakeBrowser.storage.local as {
+			setAccessLevel: (options: { accessLevel: string }) => Promise<void>;
+		};
+		const local = vi.spyOn(localStorage, "setAccessLevel").mockReturnValue(ready.promise);
+		const session = vi.spyOn(fakeBrowser.storage.session, "setAccessLevel");
+		const auth = await load();
+		await auth.credentialsItem.setValue(credentials());
+		const read = vi.spyOn(auth.credentialsItem, "getValue");
+		const token = auth.getAccessToken();
+		const state = auth.getAuthState();
+		await vi.waitFor(() => expect(local).toHaveBeenCalledOnce());
+		expect(read).not.toHaveBeenCalled();
+		ready.resolve();
+		await expect(token).resolves.toBe("access-1");
+		await expect(state).resolves.toMatchObject({ signedIn: true });
+		expect(local).toHaveBeenCalledExactlyOnceWith({
+			accessLevel: "TRUSTED_CONTEXTS",
+		});
+		expect(session).toHaveBeenCalledExactlyOnceWith({
+			accessLevel: "TRUSTED_CONTEXTS",
+		});
+	});
+
+	it.each(["local", "session"] as const)(
+		"%s の保護に失敗したら資格情報と外部通信に触れない",
+		async (area) => {
+			vi.spyOn(fakeBrowser.storage[area], "setAccessLevel").mockRejectedValue(
+				new Error("内部の詳細"),
+			);
+			const createTab = vi.spyOn(fakeBrowser.tabs, "create");
+			const auth = await load();
+			await auth.credentialsItem.setValue(credentials());
+			const read = vi.spyOn(auth.credentialsItem, "getValue");
+			await expect(auth.getAccessToken()).rejects.toThrow("認証情報の保護を設定できませんでした");
+			await expect(auth.startSignIn()).rejects.toThrow("認証情報の保護を設定できませんでした");
+			expect(read).not.toHaveBeenCalled();
+			expect(endpoint.postToken).not.toHaveBeenCalled();
+			expect(createTab).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("getAccessToken", () => {

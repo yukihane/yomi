@@ -5,6 +5,7 @@ import type { SegmentState, Showing } from "@/domain/page";
 import { markTranslated, restoreContentLang, setContentLang } from "./markers";
 import { build, serialize } from "./markup";
 import type { Serialized } from "./markup";
+import { isHidden } from "./segmenter";
 import type { Run } from "./segmenter";
 
 /** 要素を差し替えないのでフレームワーク管理下の DOM を壊さない */
@@ -41,6 +42,14 @@ export class Segment {
 			...(this.applied?.mode === "inplace" ? this.applied.writes.map((w) => w.node) : []),
 			...(this.applied?.mode === "replace" ? this.applied.nodes : []),
 		];
+	}
+
+	isCurrentSource(): boolean {
+		if (!this.parent.isConnected || isHidden(this.parent)) return false;
+		if (this.original.some((node) => node.parentNode !== this.parent)) return false;
+		return (
+			serialize({ parent: this.parent, nodes: this.original }).markup === this.serialized.markup
+		);
 	}
 
 	applyTranslation(markup: string, lang: LanguageCode) {

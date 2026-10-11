@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { SerializedFailureSchema } from "@/domain/failure";
+import type { MessageAudience } from "@/domain/message-caller";
 import { ModelInfoSchema } from "@/domain/models";
 import { SignOutResultSchema } from "@/domain/sign-out";
 import { CachedTranslationSchema } from "@/domain/translation-cache";
@@ -29,24 +30,34 @@ const AuthStateSchema = v.object({
 
 export type AuthState = v.InferOutput<typeof AuthStateSchema>;
 
-const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(params: P, result: R) => ({
+const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(
+	params: P,
+	result: R,
+	audience: MessageAudience,
+) => ({
 	params,
 	result,
+	audience,
 });
 
 export const BACKGROUND_API = {
-	"auth:getState": endpoint(v.void(), AuthStateSchema),
-	"auth:signIn": endpoint(v.void(), v.void()),
-	"auth:signOut": endpoint(v.void(), SignOutResultSchema),
-	"models:list": endpoint(v.void(), v.array(ModelInfoSchema)),
-	"open:options": endpoint(v.void(), v.void()),
-	"open:usage": endpoint(v.void(), v.void()),
-	"open:shortcuts": endpoint(v.void(), v.void()),
+	"auth:getState": endpoint(v.void(), AuthStateSchema, "extension"),
+	"auth:signIn": endpoint(v.void(), v.void(), "extension"),
+	"auth:signOut": endpoint(v.void(), SignOutResultSchema, "extension"),
+	"models:list": endpoint(v.void(), v.array(ModelInfoSchema), "extension"),
+	"open:options": endpoint(v.void(), v.void(), "either"),
+	"open:usage": endpoint(v.void(), v.void(), "either"),
+	"open:shortcuts": endpoint(v.void(), v.void(), "extension"),
 	"cache:lookup": endpoint(
 		v.object({ keys: v.array(v.string()) }),
 		v.array(v.nullable(v.string())),
+		"content",
 	),
-	"cache:store": endpoint(v.object({ entries: v.array(CachedTranslationSchema) }), v.void()),
+	"cache:store": endpoint(
+		v.object({ entries: v.array(CachedTranslationSchema) }),
+		v.void(),
+		"content",
+	),
 };
 
 type BackgroundApi = typeof BACKGROUND_API;

@@ -2,7 +2,10 @@ import * as v from "valibot";
 
 import { browser } from "#imports";
 import type { SerializedFailure } from "@/domain/failure";
+import { authorizeMessage } from "@/domain/message-caller";
+import type { MessageCaller } from "@/domain/message-caller";
 
+import { getMessageCaller } from "./caller";
 import {
 	BACKGROUND_API,
 	BackgroundRequestSchema,
@@ -22,15 +25,15 @@ import type {
 const KEEP_ALIVE_INTERVAL_MS = 20_000;
 
 export type BackgroundHandlers = {
-	[K in BackgroundMethod]: (params: ParamsOf<K>) => Promise<ResultOf<K>>;
+	[K in BackgroundMethod]: (params: ParamsOf<K>, caller: MessageCaller) => Promise<ResultOf<K>>;
 };
 
 type ToFailure = (e: unknown) => SerializedFailure;
 
 export function serveBackgroundApi(handlers: BackgroundHandlers, toFailure: ToFailure) {
-	browser.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse) => {
+	browser.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
 		const respond = (response: BackgroundResponse) => sendResponse(response);
-		dispatch(handlers, raw).then(
+		dispatch(handlers, raw, sender).then(
 			(value) => respond({ ok: true, value }),
 			(e: unknown) => respond({ ok: false, failure: toFailure(e) }),
 		);
@@ -38,24 +41,44 @@ export function serveBackgroundApi(handlers: BackgroundHandlers, toFailure: ToFa
 	});
 }
 
-async function dispatch(handlers: BackgroundHandlers, raw: unknown): Promise<unknown> {
+async function dispatch(
+	handlers: BackgroundHandlers,
+	raw: unknown,
+	sender: unknown,
+): Promise<unknown> {
+	const caller = getMessageCaller(sender);
 	const { type, params } = v.parse(BackgroundRequestSchema, raw);
-	return await call(handlers, type, params);
+	authorizeMessage(caller, BACKGROUND_API[type].audience);
+	return await call(handlers, type, params, caller);
 }
 
-function call<K extends BackgroundMethod>(handlers: BackgroundHandlers, type: K, params: unknown) {
-	return handlers[type](v.parse(BACKGROUND_API[type].params, params));
+function call<K extends BackgroundMethod>(
+	handlers: BackgroundHandlers,
+	type: K,
+	params: unknown,
+	caller: MessageCaller,
+) {
+	return handlers[type](v.parse(BACKGROUND_API[type].params, params), caller);
 }
 
 export type TranslateHandler = (
 	req: TranslateRequest,
 	signal: AbortSignal,
 	onDelta: (text: string) => void,
+	caller: MessageCaller,
 ) => Promise<void>;
 
 export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFailure) {
 	browser.runtime.onConnect.addListener((port) => {
 		if (port.name !== TRANSLATE_PORT) return;
+		let caller: MessageCaller;
+		try {
+			caller = getMessageCaller(port.sender);
+			authorizeMessage(caller, "content");
+		} catch {
+			port.disconnect();
+			return;
+		}
 		const controller = new AbortController();
 		port.onDisconnect.addListener(() => controller.abort());
 		port.onMessage.addListener((raw: unknown) => {
@@ -67,8 +90,11 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 				KEEP_ALIVE_INTERVAL_MS,
 			);
 			const run = async () =>
-				await translate(v.parse(TranslateRequestSchema, raw), controller.signal, (text) =>
-					post({ type: "delta", text }),
+				await translate(
+					v.parse(TranslateRequestSchema, raw),
+					controller.signal,
+					(text) => post({ type: "delta", text }),
+					caller,
 				);
 			void run()
 				.then(

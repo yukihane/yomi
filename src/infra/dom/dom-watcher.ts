@@ -1,11 +1,20 @@
 import { blockAncestor, isHidden } from "./segmenter";
 
 const RESCAN_THROTTLE_MS = 400;
-const VISIBILITY_ATTRIBUTES = ["class", "style", "hidden", "open", "aria-hidden"];
+const VISIBILITY_ATTRIBUTES = [
+	"class",
+	"style",
+	"hidden",
+	"open",
+	"aria-hidden",
+	"translate",
+	"contenteditable",
+];
 
 export interface DomWatcherHandlers {
 	isOwn: (node: Node) => boolean;
 	onTextChanged: (node: Text) => void;
+	onAttributesChanged: (element: Element) => void;
 	rescan: (roots: Element[]) => void;
 }
 
@@ -56,6 +65,10 @@ export class DomWatcher {
 		for (const record of records) {
 			switch (record.type) {
 				case "attributes":
+					if (record.target instanceof Element) {
+						this.handlers.onAttributesChanged(record.target);
+						this.markDirty(record.target);
+					}
 					if (this.hidden.size > 0) {
 						this.visibilityChanged = true;
 						this.scheduleRescan();
