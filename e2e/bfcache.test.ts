@@ -1,49 +1,90 @@
 import { createServer } from "node:http";
 
 import { expect, test } from "vitest";
+import type { Browser } from "wxt/browser";
 
 import { launchExtension } from "./fixtures";
+import type { Extension } from "./fixtures";
 
-test("BFCache から戻った未翻訳ページでも継続翻訳を開始する", async () => {
-	const server = createServer((request, response) => {
-		response.setHeader("Content-Type", "text/html; charset=utf-8");
-		response.end(`<!doctype html><html lang="en"><body>
+declare const chrome: typeof Browser;
+
+async function signOut(ext: Extension) {
+	const options = await ext.context.newPage();
+	await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
+	expect(
+		await options.evaluate(() => chrome.runtime.sendMessage({ type: "auth:signOut" })),
+	).toMatchObject({ ok: true });
+	await options.close();
+}
+
+test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オリジン"])(
+	"BFCache 復元時に最新の状態を反映する（%s）",
+	async (mode) => {
+		const server = createServer((request, response) => {
+			response.setHeader("Content-Type", "text/html; charset=utf-8");
+			response.end(`<!doctype html><html lang="en"><body>
 <p id="text">This is page ${request.url === "/b" ? "B" : "A"}.</p>
 <a href="/b">Next page</a>
 <script>addEventListener("pageshow", event => { document.documentElement.dataset.persisted = String(event.persisted); });</script>
 </body></html>`);
-	});
-	await new Promise<void>((resolve) => {
-		server.listen(0, "127.0.0.1", resolve);
-	});
-	const address = server.address();
-	if (address == null || typeof address === "string")
-		throw new Error("HTTP サーバーを起動できません");
-	const ext = await launchExtension({ bfcache: true });
-	try {
-		const page = await ext.context.newPage();
-		await page.goto(`http://127.0.0.1:${address.port}/a`);
-		await expect
-			.poll(() => ext.sendToTab({ type: "page:getState" }))
-			.toMatchObject({ active: false });
-		await page.locator("a").evaluate((link) => {
-			if (link instanceof HTMLAnchorElement) link.click();
 		});
-		await page.waitForURL("**/b");
-		await expect
-			.poll(() => ext.sendToTab({ type: "page:getState" }))
-			.toMatchObject({ active: false });
-		await ext.sendToTab({ type: "page:translate" });
-		await expect.poll(() => page.textContent("#text")).toBe("JA:THIS IS PAGE B.");
-		await page.goBack({ waitUntil: "commit" });
-		await expect
-			.poll(() => page.evaluate(() => document.documentElement.dataset["persisted"]))
-			.toBe("true");
-		await expect.poll(() => page.textContent("#text")).toBe("JA:THIS IS PAGE A.");
-	} finally {
-		await ext.context.close();
-		await new Promise<void>((resolve, reject) => {
-			server.close((error) => (error ? reject(error) : resolve()));
+		await new Promise<void>((resolve) => {
+			server.listen(0, "127.0.0.1", resolve);
 		});
-	}
-});
+		const address = server.address();
+		if (address == null || typeof address === "string")
+			throw new Error("HTTP サーバーを起動できません");
+		const ext = await launchExtension({ bfcache: true });
+		try {
+			const page = await ext.context.newPage();
+			await page.goto(`http://127.0.0.1:${address.port}/a`);
+			await expect
+				.poll(() => ext.sendToTab({ type: "page:getState" }))
+				.toMatchObject({ active: false });
+			const initiallyTranslated = mode !== "未翻訳" && mode !== "別オリジン";
+			if (initiallyTranslated) {
+				await ext.sendToTab({ type: "page:translate" });
+			}
+			await expect
+				.poll(() => page.textContent("#text"))
+				.toBe(initiallyTranslated ? "JA:THIS IS PAGE A." : "This is page A.");
+			await page.locator("a").evaluate((link, crossOrigin) => {
+				if (link instanceof HTMLAnchorElement) {
+					if (crossOrigin) link.hostname = "localhost";
+					link.click();
+				}
+			}, mode === "別オリジン");
+			await page.waitForURL("**/b");
+			await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toHaveProperty("active");
+			await ext.sendToTab({ type: "page:translate" });
+			await expect.poll(() => page.textContent("#text")).toBe("JA:THIS IS PAGE B.");
+			if (mode === "停止") await ext.sendToTab({ type: "page:stop" });
+			if (mode === "サインアウト") await signOut(ext);
+			await page.goBack({ waitUntil: "commit" });
+			await expect
+				.poll(() => page.evaluate(() => document.documentElement.dataset["persisted"]))
+				.toBe("true");
+			const continuing = mode === "未翻訳" || mode === "翻訳済み";
+			await expect
+				.poll(() => ext.sendToTab({ type: "page:getState" }))
+				.toMatchObject({ active: continuing });
+			await expect
+				.poll(() => page.textContent("#text"))
+				.toBe(continuing || initiallyTranslated ? "JA:THIS IS PAGE A." : "This is page A.");
+			await page.evaluate(() => {
+				const paragraph = document.createElement("p");
+				paragraph.id = "added";
+				paragraph.textContent = "Added after restoration.";
+				document.body.append(paragraph);
+			});
+			await expect
+				.poll(() => page.textContent("#added"))
+				.toBe(continuing ? "JA:ADDED AFTER RESTORATION." : "Added after restoration.");
+		} finally {
+			await ext.context.close();
+			await new Promise<void>((resolve, reject) => {
+				server.close((error) => (error ? reject(error) : resolve()));
+			});
+		}
+	},
+);
