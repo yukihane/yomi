@@ -47,7 +47,9 @@ export async function screenshot(page: Page, name: string, options?: { fullPage?
 
 export type Extension = Awaited<ReturnType<typeof launchExtension>>;
 
-export async function launchExtension(options: { bfcache?: boolean } = {}) {
+export async function launchExtension(
+	options: { bfcache?: boolean; translationText?: string } = {},
+) {
 	const executablePath = process.env["CHROMIUM_PATH"];
 	if (executablePath == null || executablePath === "")
 		throw new Error("CHROMIUM_PATH を指定してください");
@@ -71,7 +73,7 @@ export async function launchExtension(options: { bfcache?: boolean } = {}) {
 		},
 		{ timeout: 10000 },
 	);
-	await sw.evaluate(installMocks);
+	await sw.evaluate(installMocks, options.translationText);
 
 	return {
 		context,
@@ -111,7 +113,7 @@ export async function launchExtension(options: { bfcache?: boolean } = {}) {
 	};
 }
 
-async function installMocks() {
+async function installMocks(translationText?: string) {
 	await chrome.storage.local.set({
 		credentials: {
 			clientId: "oaiapp_test",
@@ -125,14 +127,19 @@ async function installMocks() {
 	await chrome.storage.sync.set({ settings: { model: "gpt-6-luna", targetLang: "ja" } });
 
 	const fakeTranslate = (markup: string) =>
-		markup.startsWith("Click ")
-			? // 語順が変わりタグ構造が原文と一致しないケース
-				markup.replace(/^Click (<g(\d+)>)here(<\/g\2>) now$/u, "$1HERE$3 CLICK NOW")
-			: "JA:" +
-				markup.replaceAll(
+		translationText != null
+			? markup.replaceAll(
 					/(^|>)([^<]*)/gu,
-					(_, gt: string, text: string) => gt + text.toUpperCase(),
-				);
+					(_, gt: string, text: string) => gt + (text.trim() === "" ? text : translationText),
+				)
+			: markup.startsWith("Click ")
+				? // 語順が変わりタグ構造が原文と一致しないケース
+					markup.replace(/^Click (<g(\d+)>)here(<\/g\2>) now$/u, "$1HERE$3 CLICK NOW")
+				: "JA:" +
+					markup.replaceAll(
+						/(^|>)([^<]*)/gu,
+						(_, gt: string, text: string) => gt + text.toUpperCase(),
+					);
 	const sse = (events: ({ type: string } & Record<string, unknown>)[]) => {
 		const encoder = new TextEncoder();
 		return new ReadableStream({

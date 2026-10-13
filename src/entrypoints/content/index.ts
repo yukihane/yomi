@@ -9,7 +9,7 @@ import { createOverlay } from "@/ui/content/Overlay";
 import { watchHoverOriginal } from "@/usecases/content/hover-original";
 import { notifyFailure } from "@/usecases/content/notify-failure";
 import { createPageCommands } from "@/usecases/content/page-commands";
-import { offerPageTranslation, rememberPageTranslating } from "@/usecases/content/page-offer";
+import { createPageOffer, rememberPageTranslating } from "@/usecases/content/page-offer";
 import { PageTranslator } from "@/usecases/content/page-translator";
 import { SelectionTranslator } from "@/usecases/content/selection-translator";
 
@@ -50,7 +50,7 @@ export default defineContentScript({
 				sendResponse(runCommand(message));
 			},
 		);
-		const offer = () => offerPageTranslation({ overlay, page, getSettings: () => settings });
+		const offer = createPageOffer({ overlay, page, getSettings: () => settings });
 		ctx.addEventListener(window, "pagehide", () => {
 			page.suspend();
 			overlay.hideOffer();

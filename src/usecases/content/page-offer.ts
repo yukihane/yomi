@@ -7,17 +7,28 @@ import type { Overlay } from "./overlay";
 import type { PageTranslator } from "./page-translator";
 import { startPageTranslation } from "./start-page";
 
-export async function offerPageTranslation(deps: {
+type PageOfferDependencies = {
 	overlay: Overlay;
 	page: PageTranslator;
 	getSettings: () => Settings;
-}): Promise<void> {
+};
+
+export function createPageOffer(deps: PageOfferDependencies): () => Promise<void> {
+	// BFCache 復元後の本文は訳文なので、文書初期化時の原文から得た結果を使う。
+	const sourceLanguage = detectPageLanguage().catch(() => null);
+	return () => offerPageTranslation(deps, sourceLanguage);
+}
+
+async function offerPageTranslation(
+	deps: PageOfferDependencies,
+	sourceLanguage: Promise<string | null>,
+): Promise<void> {
 	const { overlay, page } = deps;
 	const host = location.hostname;
 	if (host === "") return;
 	const url = location.href;
 	const revision = page.activityVersion;
-	const state = await Promise.all([callBackground("offer:getState"), detectPageLanguage()]).catch(
+	const state = await Promise.all([callBackground("offer:getState"), sourceLanguage]).catch(
 		() => null,
 	);
 	if (

@@ -17,12 +17,17 @@ async function signOut(ext: Extension) {
 	await options.close();
 }
 
-test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オリジン"])(
+const japanese =
+	"これは翻訳された日本語の文章です。ページの内容を分かりやすく説明しています。新しく追加された文章も引き続き翻訳する必要があります。";
+
+test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オリジン", "言語指定なし"])(
 	"BFCache 復元時に最新の状態を反映する（%s）",
 	async (mode) => {
+		const translated = (text: string) =>
+			mode === "言語指定なし" ? japanese : `JA:${text.toUpperCase()}`;
 		const server = createServer((request, response) => {
 			response.setHeader("Content-Type", "text/html; charset=utf-8");
-			response.end(`<!doctype html><html lang="en"><body>
+			response.end(`<!doctype html><html ${mode === "言語指定なし" ? "" : 'lang="en"'}><body>
 <p id="text">This is page ${request.url === "/b" ? "B" : "A"}.</p>
 <a href="/b">Next page</a>
 <script>addEventListener("pageshow", event => { document.documentElement.dataset.persisted = String(event.persisted); });</script>
@@ -34,7 +39,10 @@ test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オ�
 		const address = server.address();
 		if (address == null || typeof address === "string")
 			throw new Error("HTTP サーバーを起動できません");
-		const ext = await launchExtension({ bfcache: true });
+		const ext = await launchExtension({
+			bfcache: true,
+			translationText: mode === "言語指定なし" ? japanese : undefined,
+		});
 		try {
 			const page = await ext.context.newPage();
 			await page.goto(`http://127.0.0.1:${address.port}/a`);
@@ -47,7 +55,17 @@ test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オ�
 			}
 			await expect
 				.poll(() => page.textContent("#text"))
-				.toBe(initiallyTranslated ? "JA:THIS IS PAGE A." : "This is page A.");
+				.toBe(initiallyTranslated ? translated("This is page A.") : "This is page A.");
+			const detected = await ext.context
+				.serviceWorkers()[0]!
+				.evaluate(
+					(text) => chrome.i18n.detectLanguage(text),
+					await page.locator("body").innerText(),
+				);
+			expect(
+				mode !== "言語指定なし" ||
+					(detected.isReliable && detected.languages[0]?.language === "ja"),
+			).toBe(true);
 			await page.locator("a").evaluate((link, crossOrigin) => {
 				if (link instanceof HTMLAnchorElement) {
 					if (crossOrigin) link.hostname = "localhost";
@@ -57,20 +75,22 @@ test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オ�
 			await page.waitForURL("**/b");
 			await expect.poll(() => ext.sendToTab({ type: "page:getState" })).toHaveProperty("active");
 			await ext.sendToTab({ type: "page:translate" });
-			await expect.poll(() => page.textContent("#text")).toBe("JA:THIS IS PAGE B.");
+			await expect.poll(() => page.textContent("#text")).toBe(translated("This is page B."));
 			if (mode === "停止") await ext.sendToTab({ type: "page:stop" });
 			if (mode === "サインアウト") await signOut(ext);
 			await page.goBack({ waitUntil: "commit" });
 			await expect
 				.poll(() => page.evaluate(() => document.documentElement.dataset["persisted"]))
 				.toBe("true");
-			const continuing = mode === "未翻訳" || mode === "翻訳済み";
+			const continuing = mode === "未翻訳" || mode === "翻訳済み" || mode === "言語指定なし";
 			await expect
 				.poll(() => ext.sendToTab({ type: "page:getState" }))
 				.toMatchObject({ active: continuing });
 			await expect
 				.poll(() => page.textContent("#text"))
-				.toBe(continuing || initiallyTranslated ? "JA:THIS IS PAGE A." : "This is page A.");
+				.toBe(
+					continuing || initiallyTranslated ? translated("This is page A.") : "This is page A.",
+				);
 			await page.evaluate(() => {
 				const paragraph = document.createElement("p");
 				paragraph.id = "added";
@@ -79,7 +99,7 @@ test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オ�
 			});
 			await expect
 				.poll(() => page.textContent("#added"))
-				.toBe(continuing ? "JA:ADDED AFTER RESTORATION." : "Added after restoration.");
+				.toBe(continuing ? translated("Added after restoration.") : "Added after restoration.");
 		} finally {
 			await ext.context.close();
 			await new Promise<void>((resolve, reject) => {

@@ -5,7 +5,7 @@ import { EMPTY_SITE_RULES } from "@/domain/site-rules";
 import type { SiteRules } from "@/domain/site-rules";
 
 import type { OfferOptions, Overlay } from "./overlay";
-import { offerPageTranslation } from "./page-offer";
+import { createPageOffer } from "./page-offer";
 import type { PageTranslator } from "./page-translator";
 
 const deps = vi.hoisted(() => ({ detectPageLanguage: vi.fn(), callBackground: vi.fn() }));
@@ -20,7 +20,7 @@ beforeEach(() => {
 		rules: { ...EMPTY_SITE_RULES },
 	};
 	vi.stubGlobal("location", { hostname: "example.com", href: "https://example.com/page" });
-	deps.detectPageLanguage.mockResolvedValue("en-US");
+	deps.detectPageLanguage.mockReset().mockResolvedValue("en-US");
 	deps.callBackground.mockReset();
 	deps.callBackground.mockImplementation((method: string) =>
 		Promise.resolve(method === "offer:getState" ? state : undefined),
@@ -33,12 +33,11 @@ function setup() {
 		hideOffer: vi.fn(),
 		toast: vi.fn(),
 	};
-	const run = () =>
-		offerPageTranslation({
-			page: page as unknown as PageTranslator,
-			overlay: overlay as unknown as Overlay,
-			getSettings: () => withDefaults({}),
-		});
+	const run = createPageOffer({
+		page: page as unknown as PageTranslator,
+		overlay: overlay as unknown as Overlay,
+		getSettings: () => withDefaults({}),
+	});
 	const offer = () => overlay.showOffer.mock.calls[0]![0];
 	return { page, overlay, run, offer };
 }
@@ -75,10 +74,10 @@ it("提案の除外は現在サイト用 API へ委ねる", async () => {
 it.each(["signedOut", "dismissed", "sameLanguage", "active"])(
 	"%s では提案・自動翻訳を行わない",
 	async (reason) => {
+		if (reason === "sameLanguage") deps.detectPageLanguage.mockResolvedValue("ja");
 		const ctx = setup();
 		if (reason === "signedOut") state.signedIn = false;
 		if (reason === "dismissed") state.offerDismissed = true;
-		if (reason === "sameLanguage") deps.detectPageLanguage.mockResolvedValue("ja");
 		if (reason === "active") ctx.page.isActive = true;
 		await ctx.run();
 		expect(ctx.overlay.showOffer).not.toHaveBeenCalled();
@@ -109,4 +108,35 @@ it("状態を取得できなければ自動翻訳しない", async () => {
 	await ctx.run();
 	expect(ctx.page.start).not.toHaveBeenCalled();
 	expect(ctx.overlay.showOffer).not.toHaveBeenCalled();
+});
+
+it.each(["en", null])("原文言語 %s を保持し、復元した訳文を再判定しない", async (language) => {
+	deps.detectPageLanguage.mockResolvedValue(language);
+	const ctx = setup();
+	await ctx.run();
+	deps.detectPageLanguage.mockResolvedValue("ja");
+	state.translating = true;
+	await ctx.run();
+	expect(ctx.page.start).toHaveBeenCalledOnce();
+	expect(deps.detectPageLanguage).toHaveBeenCalledOnce();
+	expect(deps.callBackground).toHaveBeenCalledTimes(2);
+});
+
+it.each(["signedOut", "stopped"])("言語を保持しても復元時の %s を反映する", async (reason) => {
+	const ctx = setup();
+	await ctx.run();
+	state.translating = reason !== "stopped";
+	state.signedIn = reason !== "signedOut";
+	await ctx.run();
+	expect(ctx.page.start).not.toHaveBeenCalled();
+});
+
+it("別文書では言語を取り直し、元から翻訳先言語なら継続中でも開始しない", async () => {
+	await setup().run();
+	deps.detectPageLanguage.mockResolvedValue("ja");
+	state.translating = true;
+	const next = setup();
+	await next.run();
+	expect(next.page.start).not.toHaveBeenCalled();
+	expect(deps.detectPageLanguage).toHaveBeenCalledTimes(2);
 });
