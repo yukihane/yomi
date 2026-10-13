@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 
 import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
+import { expect } from "vitest";
 import type { Browser } from "wxt/browser";
 
 // sw.evaluate に渡す関数は service worker 内で実行されるので、そこにある chrome を参照する
@@ -80,7 +81,18 @@ export async function launchExtension() {
 				route.fulfill({ contentType: "text/html", body: TEST_PAGE }),
 			);
 			await page.goto(url);
-			await page.waitForTimeout(500);
+			await expect
+				.poll(() =>
+					sw.evaluate(async () => {
+						const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+						if (tab?.id == null) return false;
+						return await chrome.tabs.sendMessage(tab.id, { type: "page:getState" }).then(
+							() => true,
+							() => false,
+						);
+					}),
+				)
+				.toBe(true);
 			return page;
 		},
 	};

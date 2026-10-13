@@ -53,13 +53,13 @@ export async function cacheSession(signal: AbortSignal, incognito: boolean) {
 async function changeCache(enabled?: boolean): Promise<void> {
 	const resume = pauseTranslations();
 	const operation = async () => {
-		await stopRememberedTranslations();
 		await stopAllPageTranslations();
 		await initializeCache().catch(() => {});
 		await protectAuthStorage();
 		const previous = await cachePolicyItem.getValue();
 		epoch = null;
 		await cachePolicyItem.setValue({ enabled: enabled ?? previous.enabled, blocked: true });
+		await stopRememberedTranslations();
 		epoch = await rotateCache(true);
 		await cachePolicyItem.setValue({ enabled: enabled ?? previous.enabled, blocked: false });
 		ready = Promise.resolve();

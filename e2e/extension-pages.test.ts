@@ -14,7 +14,7 @@ test.runIf(takesScreenshots)("ポップアップを表示する", async () => {
 	const popup = await ext.context.newPage();
 	await popup.setViewportSize({ width: 340, height: 520 });
 	await popup.goto(`chrome-extension://${ext.extensionId}/popup.html`);
-	await popup.waitForTimeout(600);
+	await expect.poll(() => popup.getByText("tester@example.com").count()).toBe(1);
 	await screenshot(popup, "popup", { fullPage: true });
 	await popup.close();
 });

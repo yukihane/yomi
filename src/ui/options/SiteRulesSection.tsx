@@ -17,7 +17,7 @@ export function SiteRulesSection() {
 		<section class="section">
 			<h2>サイト</h2>
 			<form
-				class="row"
+				class="row site-rule-form"
 				onSubmit={(event) => {
 					event.preventDefault();
 					void update({ type: "always", host: host().trim().toLowerCase(), enabled: true }).then(
@@ -30,6 +30,7 @@ export function SiteRulesSection() {
 				<label class="field grow">
 					<span>常に翻訳するサイト名</span>
 					<input
+						type="text"
 						value={host()}
 						placeholder="example.com"
 						onInput={(event) => setHost(event.currentTarget.value)}

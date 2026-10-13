@@ -50,8 +50,21 @@ h1 {
 	flex-direction: column;
 	gap: 4px;
 }
-.field select {
+.field select,
+.field input[type="text"] {
 	max-width: 360px;
+}
+.field input[type="text"] {
+	width: 100%;
+	background: var(--raised);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 6px 10px;
+}
+.site-rule-form {
+	max-width: 440px;
+	align-items: end;
+	margin-bottom: 12px;
 }
 .usage {
 	width: 100%;
