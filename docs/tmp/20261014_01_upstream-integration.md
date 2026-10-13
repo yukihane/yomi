@@ -28,3 +28,9 @@ E2E では、保護したストレージの直接読み書き拒否、個人情�
 2026-10-14 の最終確認で `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm knip`、`pnpm test`（373件）、`pnpm build` が成功した。Playwright 1.64.0 対応の Chromium で E2E を実行し、提案・設定・ポップアップのスクリーンショットを目視確認した。追加のモデル案内テストを含む E2E の最終件数は PR に記録する。
 
 `gh-actions-lock --no-interactive` は既存2ワークフローを検証し、追加のロック変更は不要だった。`git diff --check` が成功し、upstream `00b4a47` が HEAD の祖先であることも確認した。PR は upstream の親子関係を残すため、squash / rebase を使わずマージする。
+
+## BFCache のレビュー対応
+
+[レビュー指摘](https://github.com/yukihane/yomi/pull/19#discussion_r4262532049)に対し、Playwright の `--disable-back-forward-cache` を専用テストで除外し、ローカル HTTP サーバーと `pageshow.persisted` の確認で復元経路を検証した。修正前は「未翻訳の A → B で翻訳開始 → 戻る」で A が原文のままになり、回帰テストが失敗した。
+
+`2dfbdf3` で `pagehide` 時に継続設定を変更せずページの通信・監視を中断し、BFCache 復元時に既存の認可済み API から最新状態を取得して再判定するよう修正した。ユーザーの停止操作は従来どおり継続設定も解除する。`9196f31` で翻訳済みページの復元・復元後の DOM 追加・移動先での停止とサインアウト・別オリジンからの復帰を追加検証する。既存 E2E の戻る／進むの成功だけでは BFCache 経路を網羅していなかった点を訂正する。
