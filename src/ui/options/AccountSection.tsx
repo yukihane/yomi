@@ -17,10 +17,13 @@ export function AccountSection(props: { auth: AuthState }) {
 		try {
 			const result = await callBackground("auth:signOut");
 			setSignOutMessage(
-				result.remote === "failed"
-					? "端末内の資格情報は削除しましたが、トークンの失効を確認できませんでした。ChatGPT の設定からこのアプリのアクセスを取り消してください。"
-					: "端末内の資格情報を削除しました。" +
-							(result.remote === "revoked" ? "トークンの失効要求は受理されました。" : ""),
+				(result.cacheCleared
+					? "保存済みの訳文を消去しました。"
+					: "訳文の消去に失敗しました。キャッシュは停止しています。キャッシュ欄から消去を再試行してください。") +
+					(result.remote === "failed"
+						? "端末内の資格情報は削除しましたが、トークンの失効を確認できませんでした。ChatGPT の設定からこのアプリのアクセスを取り消してください。"
+						: "端末内の資格情報を削除しました。" +
+							(result.remote === "revoked" ? "トークンの失効要求は受理されました。" : "")),
 			);
 		} catch {
 			setSignOutMessage(

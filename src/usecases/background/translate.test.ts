@@ -142,6 +142,12 @@ describe("translate", () => {
 	});
 });
 
+vi.mock("./cache", () => ({
+	cacheSession: vi.fn(async (signal: AbortSignal, incognito: boolean) => ({
+		signal,
+		epoch: incognito ? null : "epoch",
+	})),
+}));
 it("出力上限を超えるdeltaを表示せず中断する", async () => {
 	await updateSettings({ model: "model" });
 	vi.mocked(getAccessToken).mockResolvedValue("token");

@@ -183,3 +183,14 @@ async function installMocks() {
 		return await realFetch(url, init);
 	};
 }
+
+export async function enableCache(ext: Extension) {
+	const options = await ext.context.newPage();
+	await options.goto(`chrome-extension://${ext.extensionId}/options.html`);
+	const result: unknown = await options.evaluate(() =>
+		chrome.runtime.sendMessage({ type: "cache:enable" }),
+	);
+	if (typeof result !== "object" || result == null || !("ok" in result) || result.ok !== true)
+		throw new Error("テスト用キャッシュを有効にできませんでした");
+	await options.close();
+}

@@ -1,6 +1,9 @@
 import { expect, test } from "vitest";
+import type { Browser } from "wxt/browser";
 
-import { launchExtension } from "./fixtures";
+import { enableCache, launchExtension } from "./fixtures";
+
+declare const chrome: typeof Browser;
 
 type LegacyProbe = typeof globalThis & { __legacyDb: IDBDatabase };
 
@@ -54,6 +57,9 @@ test("旧画面がDB更新を妨げても翻訳でき、解放後は旧行を破
 			});
 			(globalThis as LegacyProbe).__legacyDb = db;
 		});
+		await worker.evaluate(() =>
+			chrome.storage.local.set({ cachePolicy: { enabled: true, blocked: false } }),
+		);
 		const first = await ext.openTestPage();
 		await first.bringToFront();
 		await ext.sendToTab({ type: "page:translate" });
@@ -67,7 +73,8 @@ test("旧画面がDB更新を妨げても翻訳でき、解放後は旧行を破
 						(await indexedDB.databases()).find((db) => db.name === "translation-cache")?.version,
 				),
 			)
-			.toBe(2);
+			.toBe(3);
+		await enableCache(ext);
 		const before = (await ext.requests()).length;
 		const second = await ext.openTestPage();
 		await second.bringToFront();
@@ -84,7 +91,7 @@ test("旧画面がDB更新を妨げても翻訳でき、解放後は旧行を破
 		expect((await ext.requests()).length).toBe(count);
 		const oldRow = await worker.evaluate(async () => {
 			const db = await new Promise<IDBDatabase>((resolve) => {
-				const request = indexedDB.open("translation-cache", 2);
+				const request = indexedDB.open("translation-cache", 3);
 				request.onsuccess = () => resolve(request.result);
 			});
 			try {

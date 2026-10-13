@@ -114,3 +114,10 @@ it("選択翻訳とシークレット文書は永続キャッシュを参照・�
 	expect(lookupTranslations).not.toHaveBeenCalled();
 	expect(storeTranslations).not.toHaveBeenCalled();
 });
+
+vi.mock("./cache", () => ({
+	cacheSession: vi.fn(async (signal: AbortSignal, incognito: boolean) => ({
+		signal,
+		epoch: incognito ? null : "epoch",
+	})),
+}));

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import { cacheKey } from "../src/domain/translation-cache";
-import { launchExtension, TEST_PAGE } from "./fixtures";
+import { enableCache, launchExtension, TEST_PAGE } from "./fixtures";
 import type { Extension } from "./fixtures";
 
 async function content(ext: Extension, url: string) {
@@ -50,6 +50,7 @@ const translated = [{ type: "segment", index: 0, markup: "JA:HELLO" }, { type: "
 
 test("別サイトの既知キーを参照・上書きできず、正規の同一サイトキャッシュは再利用できる", async () => {
 	const ext = await launchExtension();
+	await enableCache(ext);
 	try {
 		const siteB = await content(ext, "https://b.example/page");
 		expect(await siteB.evaluate(stream(request))).toEqual(translated);
@@ -92,6 +93,7 @@ test("別サイトの既知キーを参照・上書きできず、正規の同�
 
 test("旧翻訳形式は再読み込みを案内し、APIに送信しない", async () => {
 	const ext = await launchExtension();
+	await enableCache(ext);
 	try {
 		const site = await content(ext, "https://a.example/page");
 		expect(await site.evaluate(stream({ instructions: "old", input: "Hello" }))).toEqual([

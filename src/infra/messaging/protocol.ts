@@ -4,6 +4,7 @@ import { SerializedFailureSchema } from "@/domain/failure";
 import type { MessageAudience } from "@/domain/message-caller";
 import { ModelInfoSchema } from "@/domain/models";
 import { SignOutResultSchema } from "@/domain/sign-out";
+import { CacheStatusSchema } from "@/domain/translation-cache";
 import { TranslationOutputSchema } from "@/domain/translation-request";
 
 export { TranslateRequestSchema } from "@/domain/translation-request";
@@ -37,6 +38,10 @@ const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(
 });
 
 export const BACKGROUND_API = {
+	"cache:status": endpoint(v.void(), CacheStatusSchema, "extension"),
+	"cache:enable": endpoint(v.void(), v.void(), "extension"),
+	"cache:disable": endpoint(v.void(), v.void(), "extension"),
+	"cache:clear": endpoint(v.void(), v.void(), "extension"),
 	"auth:getState": endpoint(v.void(), AuthStateSchema, "extension"),
 	"auth:signIn": endpoint(v.void(), v.void(), "extension"),
 	"auth:signOut": endpoint(v.void(), SignOutResultSchema, "extension"),

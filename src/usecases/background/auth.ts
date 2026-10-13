@@ -20,6 +20,8 @@ import { clientIdItem, credentialsItem, hostIdItem, signInItem } from "@/infra/s
 import type { Credentials, PendingSignIn } from "@/infra/storage/auth";
 import { protectAuthStorage } from "@/infra/storage/auth-access";
 
+import { clearCache, pauseTranslations } from "./cache";
+
 const REFRESH_MARGIN_MS = 60 * 1000;
 
 export async function getAuthState(): Promise<AuthState> {
@@ -120,16 +122,22 @@ async function completeSignIn(pending: PendingSignIn, callback: URL): Promise<vo
 	if (previous?.subject != null && previous.subject !== claims.sub)
 		throw new Error("サインインしたアカウントが一致しません。先にサインアウトしてください。");
 
-	credentialsGeneration++;
-	await credentialsItem.setValue({
-		clientId,
-		subject: claims.sub,
-		email: claims.email,
-		idToken: tokens.idToken,
-		accessToken: tokens.accessToken,
-		refreshToken: tokens.refreshToken,
-		expiresAt: Date.now() + tokens.expiresIn * 1000,
-	});
+	const resume = pauseTranslations();
+	try {
+		await clearCache();
+		credentialsGeneration++;
+		await credentialsItem.setValue({
+			clientId,
+			subject: claims.sub,
+			email: claims.email,
+			idToken: tokens.idToken,
+			accessToken: tokens.accessToken,
+			refreshToken: tokens.refreshToken,
+			expiresAt: Date.now() + tokens.expiresIn * 1000,
+		});
+	} finally {
+		resume();
+	}
 }
 
 /** 進んでいたら refresh の結果を書き戻さない */
@@ -195,18 +203,27 @@ async function refresh(creds: Credentials): Promise<Credentials> {
 }
 
 export async function signOut(): Promise<SignOutResult> {
-	await protectAuthStorage();
-	credentialsGeneration++;
-	// 進行中の refresh が新しい refresh token を受け取っていれば、そちらを revoke する
-	await refreshPromise?.catch(() => {});
-	const creds = await credentialsItem.getValue();
-	await credentialsItem.setValue(null);
-	if (!creds) return { localCleared: true, remote: "not_needed" };
+	const resume = pauseTranslations();
 	try {
-		await revokeRefreshToken(creds.refreshToken, creds.clientId);
-		return { localCleared: true, remote: "revoked" };
-	} catch {
-		return { localCleared: true, remote: "failed" };
+		await protectAuthStorage();
+		credentialsGeneration++;
+		const cacheCleared = await clearCache().then(
+			() => true,
+			() => false,
+		);
+		// 進行中の refresh が新しい refresh token を受け取っていれば、そちらを revoke する
+		await refreshPromise?.catch(() => {});
+		const creds = await credentialsItem.getValue();
+		await credentialsItem.setValue(null);
+		if (!creds) return { localCleared: true, cacheCleared, remote: "not_needed" };
+		try {
+			await revokeRefreshToken(creds.refreshToken, creds.clientId);
+			return { localCleared: true, cacheCleared, remote: "revoked" };
+		} catch {
+			return { localCleared: true, cacheCleared, remote: "failed" };
+		}
+	} finally {
+		resume();
 	}
 }
 

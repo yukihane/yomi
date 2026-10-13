@@ -38,6 +38,10 @@ function contentSender(): Browser.runtime.MessageSender {
 
 function handlers(): BackgroundHandlers {
 	return {
+		"cache:status": vi.fn(),
+		"cache:enable": vi.fn(),
+		"cache:disable": vi.fn(),
+		"cache:clear": vi.fn(),
 		"auth:getState": vi
 			.fn()
 			.mockResolvedValue({ signedIn: true, email: "private@example.invalid" }),
@@ -60,14 +64,21 @@ async function request(sender: unknown, type: string, params?: unknown) {
 	return { api, value: response.mock.calls[0]![0] };
 }
 
-it.each(["auth:getState", "auth:signIn", "auth:signOut", "models:list", "open:shortcuts"])(
-	"content script の %s 呼び出しを拒否する",
-	async (type) => {
-		const { api, value } = await request(contentSender(), type);
-		expect(value).toMatchObject({ ok: false });
-		for (const handler of Object.values(api)) expect(handler).not.toHaveBeenCalled();
-	},
-);
+it.each([
+	"auth:getState",
+	"auth:signIn",
+	"auth:signOut",
+	"models:list",
+	"open:shortcuts",
+	"cache:status",
+	"cache:enable",
+	"cache:disable",
+	"cache:clear",
+])("content script の %s 呼び出しを拒否する", async (type) => {
+	const { api, value } = await request(contentSender(), type);
+	expect(value).toMatchObject({ ok: false });
+	for (const handler of Object.values(api)) expect(handler).not.toHaveBeenCalled();
+});
 
 it("正規の拡張設定画面は認証状態を取得できる", async () => {
 	const { value } = await request(
