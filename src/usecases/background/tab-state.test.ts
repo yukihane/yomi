@@ -38,6 +38,8 @@ function navigation(
 }
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.spyOn(fakeBrowser.storage.local, "setAccessLevel").mockResolvedValue();
+	vi.spyOn(fakeBrowser.storage.session, "setAccessLevel").mockResolvedValue();
 	frames.clear();
 	frames.set(1, { documentId: "doc-1", url: "https://example.com/first" });
 	frames.set(2, { documentId: "doc-1", url: "https://example.com/first" });

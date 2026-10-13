@@ -2,11 +2,11 @@ import * as v from "valibot";
 
 import { SiteRulesSchema } from "./site-rules";
 
-export const TabPageStateSchema = v.object({
+const TabPageStateSchema = v.object({
 	offerDismissed: v.boolean(),
 	translating: v.boolean(),
 });
-export const StoredTabStateSchema = v.object({
+const StoredTabStateSchema = v.object({
 	...TabPageStateSchema.entries,
 	documentId: v.string(),
 	origin: v.string(),

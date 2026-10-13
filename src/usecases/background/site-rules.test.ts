@@ -7,6 +7,9 @@ import { EMPTY_SITE_RULES } from "@/domain/site-rules";
 import { changeSiteRule, excludePageOffer, getSiteRules, pageSiteRules } from "./site-rules";
 
 const extension: MessageCaller = { kind: "extension", page: "options" };
+const navigation = fakeBrowser.webNavigation as unknown as {
+	getFrame: (details: unknown) => Promise<unknown>;
+};
 const content: MessageCaller = {
 	kind: "content",
 	tabId: 1,
@@ -17,7 +20,9 @@ const content: MessageCaller = {
 };
 beforeEach(() => {
 	fakeBrowser.reset();
-	vi.spyOn(fakeBrowser.webNavigation, "getFrame").mockResolvedValue({
+	vi.spyOn(fakeBrowser.storage.local, "setAccessLevel").mockResolvedValue();
+	vi.spyOn(fakeBrowser.storage.session, "setAccessLevel").mockResolvedValue();
+	vi.spyOn(navigation, "getFrame").mockResolvedValue({
 		documentId: "doc",
 		documentLifecycle: "active",
 		url: content.url,

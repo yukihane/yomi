@@ -70,7 +70,46 @@ async function request(sender: unknown, type: string, params?: unknown) {
 	return { api, value: response.mock.calls[0]![0] };
 }
 
+it("検証済みの引数を設定更新ハンドラーへ渡す", async () => {
+	const params = { type: "always", host: "example.com", enabled: true };
+	const { api, value } = await request(
+		{ id: browser.runtime.id, url: browser.runtime.getURL("/options.html") },
+		"siteRules:change",
+		params,
+	);
+	expect(value).toMatchObject({ ok: true });
+	expect(api["siteRules:change"]).toHaveBeenCalledWith(params, {
+		kind: "extension",
+		page: "options",
+	});
+});
+
+it.each(["https://example.com", "example.com/path", "a@other.example", "EXAMPLE.COM"])(
+	"不正なサイト名 %s を保存しない",
+	async (host) => {
+		const { api, value } = await request(
+			{ id: browser.runtime.id, url: browser.runtime.getURL("/options.html") },
+			"siteRules:change",
+			{ type: "always", host, enabled: true },
+		);
+		expect(value).toMatchObject({ ok: false });
+		expect(api["siteRules:change"]).not.toHaveBeenCalled();
+	},
+);
+
+it("content script に自動翻訳の許可を変更させない", async () => {
+	const { api, value } = await request(contentSender(), "siteRules:change", {
+		type: "always",
+		host: "example.com",
+		enabled: true,
+	});
+	expect(value).toMatchObject({ ok: false });
+	expect(api["siteRules:change"]).not.toHaveBeenCalled();
+});
+
 it.each([
+	"siteRules:get",
+	"siteRules:change",
 	"auth:getState",
 	"auth:signIn",
 	"auth:signOut",

@@ -20,7 +20,7 @@ export function cacheExpired(row: v.InferOutput<typeof CacheRowSchema>, now: num
 }
 export const CACHE_MAX_ENTRIES = 50_000;
 
-export const CachedTranslationSchema = v.object({
+const CachedTranslationSchema = v.object({
 	key: v.string(),
 	translation: v.string(),
 });
