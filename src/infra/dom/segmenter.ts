@@ -90,7 +90,7 @@ export function isAtomic(el: Element): boolean {
 	return ATOMIC_TAGS.has(el.tagName) || excludesSubtree(el);
 }
 
-export function excludesSubtree(el: Element): boolean {
+function excludesSubtree(el: Element): boolean {
 	for (let ancestor: Element | null = el; ancestor; ancestor = ancestor.parentElement) {
 		if (SKIP_TAGS.has(ancestor.tagName) || isExcluded(ancestor)) return true;
 		if (ancestor instanceof HTMLDetailsElement && !ancestor.open && ancestor !== el) {

@@ -65,8 +65,7 @@ function call<K extends BackgroundMethod>(
 	params: unknown,
 	caller: MessageCaller,
 ) {
-	v.parse(BACKGROUND_API[type].params, params);
-	return handlers[type](undefined, caller);
+	return handlers[type](v.parse(BACKGROUND_API[type].params, params), caller);
 }
 
 export type TranslateHandler = (

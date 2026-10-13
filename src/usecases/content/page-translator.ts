@@ -31,9 +31,14 @@ export interface PageTranslatorHooks {
 	getSettings: () => Settings;
 	onFatalFailure: (failure: TranslateFailure) => void;
 	onPartialFailure: () => void;
+	onActiveChange: (active: boolean) => void;
 }
 
 export class PageTranslator {
+	private revision = 0;
+	get activityVersion() {
+		return this.revision;
+	}
 	private active = false;
 	private showing: Showing = "translation";
 	private lang: LanguageCode | null = null;
@@ -71,7 +76,10 @@ export class PageTranslator {
 	}
 
 	getState(): PageState {
-		return summarizePage(this.active, this.showing, this.connectedStates());
+		return {
+			host: location.hostname,
+			...summarizePage(this.active, this.showing, this.connectedStates()),
+		};
 	}
 
 	private *connectedStates(): Generator<SegmentState> {
@@ -87,6 +95,8 @@ export class PageTranslator {
 		if (this.showing === "original") this.renderAll("translation");
 		if (this.active) return;
 		this.active = true;
+		this.revision++;
+		this.hooks.onActiveChange(true);
 		this.partialFailureNotified = false;
 		ensurePendingStyle();
 		this.scan(document.body);
@@ -98,6 +108,13 @@ export class PageTranslator {
 	}
 
 	stop() {
+		this.hooks.onActiveChange(false);
+		this.suspend();
+	}
+
+	// ページ離脱はユーザーの停止操作ではないため、タブの継続設定を変更しない。
+	suspend() {
+		this.revision++;
 		if (!this.active) return;
 		this.active = false;
 		this.watcher.stop();

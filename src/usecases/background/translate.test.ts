@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBrowser } from "wxt/testing/fake-browser";
 
 import { ApiError } from "@/domain/api-error";
-import { TranslateFailure } from "@/domain/failure";
 import type { MessageCaller } from "@/domain/message-caller";
 import { selectionInstructions } from "@/domain/prompts";
 import type { TranslateRequest } from "@/domain/translation-request";
@@ -49,16 +48,6 @@ describe("translate", () => {
 			Promise.resolve(force != null && force ? "refreshed-token" : "token"),
 		);
 		await updateSettings({ model: "gpt-test" });
-	});
-
-	it("モデル未選択なら no_model で失敗し、API を呼ばない", async () => {
-		await updateSettings({ model: null });
-
-		const error = await run().catch((e: unknown) => e);
-
-		expect(error).toBeInstanceOf(TranslateFailure);
-		expect((error as TranslateFailure).kind).toBe("no_model");
-		expect(streamResponse).not.toHaveBeenCalled();
 	});
 
 	it("設定のモデル・reasoningEffort・fastMode と訳文の入力を streamResponse に渡す", async () => {

@@ -4,12 +4,13 @@ import { join, resolve } from "node:path";
 
 import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
+import { vi } from "vitest";
 import type { Browser } from "wxt/browser";
 
 // sw.evaluate に渡す関数は service worker 内で実行されるので、そこにある chrome を参照する
 declare const chrome: typeof Browser;
 
-export type ResponsesRequest = {
+type ResponsesRequest = {
 	instructions: string;
 	store: boolean;
 	stream: boolean;
@@ -32,6 +33,7 @@ export const TEST_PAGE = `<!doctype html><html lang="en"><head><title>Test page<
 <div style="height:3000px"></div>
 <p id="far">This paragraph is far below the fold.</p>
 <div id="dynamic-root"></div>
+<div id="dynamic-excluded" class="notranslate"></div>
 </body></html>`;
 
 const screenshotDir = process.env["E2E_SCREENSHOT_DIR"];
@@ -45,7 +47,9 @@ export async function screenshot(page: Page, name: string, options?: { fullPage?
 
 export type Extension = Awaited<ReturnType<typeof launchExtension>>;
 
-export async function launchExtension() {
+export async function launchExtension(
+	options: { bfcache?: boolean; translationText?: string } = {},
+) {
 	const executablePath = process.env["CHROMIUM_PATH"];
 	if (executablePath == null || executablePath === "")
 		throw new Error("CHROMIUM_PATH を指定してください");
@@ -54,11 +58,22 @@ export async function launchExtension() {
 	const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "yomi-e2e-")), {
 		executablePath,
 		headless: true,
+		ignoreDefaultArgs: options.bfcache === true ? ["--disable-back-forward-cache"] : [],
 		args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
 		viewport: { width: 1000, height: 800 },
 	});
 	const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
-	await sw.evaluate(installMocks);
+	// beforeAll からも使うため、テスト内専用の expect.poll は使えない。
+	await vi.waitFor(
+		async () => {
+			const ready = await sw.evaluate(
+				() => chrome.runtime.onMessage.hasListeners() && chrome.tabs.onUpdated.hasListeners(),
+			);
+			if (!ready) throw new Error("拡張機能の初期化を待っています");
+		},
+		{ timeout: 10000 },
+	);
+	await sw.evaluate(installMocks, options.translationText);
 
 	return {
 		context,
@@ -69,6 +84,8 @@ export async function launchExtension() {
 				return await chrome.tabs.sendMessage(tab!.id!, msg);
 			}, message),
 		requests: () => sw.evaluate(() => (globalThis as MockedGlobal).__requests),
+		setSiteRules: (rules: Record<string, string[]>) =>
+			sw.evaluate((r) => chrome.storage.local.set({ siteRules: r }), rules),
 		setSettings: (settings: Record<string, unknown>) =>
 			sw.evaluate((s) => chrome.storage.sync.set({ settings: s }), settings),
 		openTestPage: async (url = "https://test.example/page") => {
@@ -77,13 +94,26 @@ export async function launchExtension() {
 				route.fulfill({ contentType: "text/html", body: TEST_PAGE }),
 			);
 			await page.goto(url);
-			await page.waitForTimeout(500);
+			await vi.waitFor(
+				async () => {
+					const ready = await sw.evaluate(async () => {
+						const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+						if (tab?.id == null) return false;
+						return await chrome.tabs.sendMessage(tab.id, { type: "page:getState" }).then(
+							() => true,
+							() => false,
+						);
+					});
+					if (!ready) throw new Error("ページ側の初期化を待っています");
+				},
+				{ timeout: 10000 },
+			);
 			return page;
 		},
 	};
 }
 
-async function installMocks() {
+async function installMocks(translationText?: string) {
 	await chrome.storage.local.set({
 		credentials: {
 			clientId: "oaiapp_test",
@@ -97,14 +127,19 @@ async function installMocks() {
 	await chrome.storage.sync.set({ settings: { model: "gpt-6-luna", targetLang: "ja" } });
 
 	const fakeTranslate = (markup: string) =>
-		markup.startsWith("Click ")
-			? // 語順が変わりタグ構造が原文と一致しないケース
-				markup.replace(/^Click (<g(\d+)>)here(<\/g\2>) now$/u, "$1HERE$3 CLICK NOW")
-			: "JA:" +
-				markup.replaceAll(
+		translationText != null
+			? markup.replaceAll(
 					/(^|>)([^<]*)/gu,
-					(_, gt: string, text: string) => gt + text.toUpperCase(),
-				);
+					(_, gt: string, text: string) => gt + (text.trim() === "" ? text : translationText),
+				)
+			: markup.startsWith("Click ")
+				? // 語順が変わりタグ構造が原文と一致しないケース
+					markup.replace(/^Click (<g(\d+)>)here(<\/g\2>) now$/u, "$1HERE$3 CLICK NOW")
+				: "JA:" +
+					markup.replaceAll(
+						/(^|>)([^<]*)/gu,
+						(_, gt: string, text: string) => gt + text.toUpperCase(),
+					);
 	const sse = (events: ({ type: string } & Record<string, unknown>)[]) => {
 		const encoder = new TextEncoder();
 		return new ReadableStream({

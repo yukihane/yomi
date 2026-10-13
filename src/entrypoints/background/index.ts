@@ -24,6 +24,14 @@ import {
 	initializeCache,
 } from "@/usecases/background/cache";
 import { openOptions, openUsage, openShortcuts } from "@/usecases/background/open-page";
+import { getPageOfferState } from "@/usecases/background/page-offer";
+import { changeSiteRule, excludePageOffer, getSiteRules } from "@/usecases/background/site-rules";
+import {
+	commitNavigation,
+	dismissOffer,
+	forgetTab,
+	setTranslating,
+} from "@/usecases/background/tab-state";
 import { listModels, translate } from "@/usecases/background/translate";
 
 const COMMAND_MESSAGES: Record<CommandName, ContentMessage> = {
@@ -43,7 +51,13 @@ export default defineBackground(() => {
 			if (signedIn) await openOptionsPage();
 		});
 	});
-	browser.tabs.onRemoved.addListener((tabId) => void handleTabRemoved(tabId));
+	browser.tabs.onRemoved.addListener((tabId) => {
+		void handleTabRemoved(tabId);
+		void forgetTab(tabId).catch(() => {});
+	});
+	browser.webNavigation.onCommitted.addListener((details) => {
+		void commitNavigation(details).catch(() => {});
+	});
 
 	browser.runtime.onInstalled.addListener(({ reason }) => {
 		void setUpContextMenus();
@@ -68,6 +82,12 @@ export default defineBackground(() => {
 
 	serveBackgroundApi(
 		{
+			"siteRules:get": getSiteRules,
+			"siteRules:change": changeSiteRule,
+			"offer:getState": (_, caller) => getPageOfferState(caller),
+			"offer:exclude": excludePageOffer,
+			"offer:dismiss": (_, caller) => dismissOffer(caller),
+			"tab:setTranslating": ({ translating }, caller) => setTranslating(caller, translating),
 			"cache:status": cacheStatus,
 			"cache:enable": enableCache,
 			"cache:disable": disableCache,

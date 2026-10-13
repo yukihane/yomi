@@ -38,8 +38,6 @@ export async function translate(
 		const source = await currentDocument(caller);
 		signal.throwIfAborted();
 		const { model, reasoningEffort, fastMode } = await getSettings();
-		if (model == null)
-			throw new TranslateFailure("no_model", "翻訳に使うモデルを選択してください。");
 		const instructions =
 			req.kind === "page"
 				? pageInstructions(req.targetLang, req.context)

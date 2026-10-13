@@ -9,6 +9,7 @@ import { createOverlay } from "@/ui/content/Overlay";
 import { watchHoverOriginal } from "@/usecases/content/hover-original";
 import { notifyFailure } from "@/usecases/content/notify-failure";
 import { createPageCommands } from "@/usecases/content/page-commands";
+import { createPageOffer, rememberPageTranslating } from "@/usecases/content/page-offer";
 import { PageTranslator } from "@/usecases/content/page-translator";
 import { SelectionTranslator } from "@/usecases/content/selection-translator";
 
@@ -29,6 +30,7 @@ export default defineContentScript({
 				overlay.toast("一部のテキストを翻訳できませんでした。もう一度翻訳すると再試行します。", {
 					error: true,
 				}),
+			onActiveChange: rememberPageTranslating,
 		});
 		const selection = new SelectionTranslator(overlay, {
 			getSettings: () => settings,
@@ -48,5 +50,14 @@ export default defineContentScript({
 				sendResponse(runCommand(message));
 			},
 		);
+		const offer = createPageOffer({ overlay, page, getSettings: () => settings });
+		ctx.addEventListener(window, "pagehide", () => {
+			page.suspend();
+			overlay.hideOffer();
+		});
+		ctx.addEventListener(window, "pageshow", (event) => {
+			if (event.persisted) void offer();
+		});
+		void offer();
 	},
 });

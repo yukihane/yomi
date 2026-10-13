@@ -21,11 +21,11 @@ export function isReasoningEffort(value: string): value is ReasoningEffort {
 /** 保存値の一部が古い・壊れていても、その項目だけ既定値に戻して他の設定は残す */
 const SettingsSchema = v.object({
 	targetLang: v.fallback(LanguageCodeSchema, "ja"),
-	/** アカウントごとに利用可能なモデルが異なるため既定値を持たない */
-	model: v.fallback(v.nullable(v.string()), null),
+	model: v.fallback(v.string(), "gpt-6-luna"),
 	reasoningEffort: v.fallback(ReasoningEffortSchema, "low"),
 	fastMode: v.fallback(v.boolean(), false),
 	showSelectionButton: v.fallback(v.boolean(), true),
+	offerTranslation: v.fallback(v.boolean(), true),
 	hoverOriginal: v.fallback(v.boolean(), true),
 	highlightPending: v.fallback(v.boolean(), true),
 });

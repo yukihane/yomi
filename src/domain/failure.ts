@@ -2,7 +2,6 @@ import * as v from "valibot";
 
 const TranslateErrorKindSchema = v.picklist([
 	"signed_out",
-	"no_model",
 	"usage_limit",
 	"request_limit",
 	"translation_stopped",
@@ -39,7 +38,7 @@ export class TranslateFailure extends Error {
 	}
 }
 
-export type FailureRemedy = "sign_in" | "open_options" | "open_usage";
+export type FailureRemedy = "sign_in" | "open_usage";
 
 interface FailurePolicy {
 	fatal: boolean;
@@ -48,7 +47,6 @@ interface FailurePolicy {
 
 export const FAILURE_POLICY: Record<TranslateErrorKind, FailurePolicy> = {
 	signed_out: { fatal: true, remedy: "sign_in" },
-	no_model: { fatal: true, remedy: "open_options" },
 	request_limit: { fatal: true, remedy: null },
 	translation_stopped: { fatal: true, remedy: null },
 	usage_limit: { fatal: true, remedy: "open_usage" },

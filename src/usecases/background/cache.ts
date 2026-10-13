@@ -4,6 +4,8 @@ import { protectAuthStorage } from "@/infra/storage/auth-access";
 import { cachePolicyItem } from "@/infra/storage/cache-policy";
 import { countTranslations, rotateCache } from "@/infra/storage/translation-cache";
 
+import { stopRememberedTranslations } from "./tab-state";
+
 let epoch: string | null = null;
 let ready: Promise<void> | null = null;
 let operations: Promise<unknown> = Promise.resolve();
@@ -57,6 +59,7 @@ async function changeCache(enabled?: boolean): Promise<void> {
 		const previous = await cachePolicyItem.getValue();
 		epoch = null;
 		await cachePolicyItem.setValue({ enabled: enabled ?? previous.enabled, blocked: true });
+		await stopRememberedTranslations();
 		epoch = await rotateCache(true);
 		await cachePolicyItem.setValue({ enabled: enabled ?? previous.enabled, blocked: false });
 		ready = Promise.resolve();
