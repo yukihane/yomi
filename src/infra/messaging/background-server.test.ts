@@ -38,6 +38,12 @@ function contentSender(): Browser.runtime.MessageSender {
 
 function handlers(): BackgroundHandlers {
 	return {
+		"siteRules:get": vi.fn(),
+		"siteRules:change": vi.fn(),
+		"offer:getState": vi.fn(),
+		"offer:exclude": vi.fn(),
+		"offer:dismiss": vi.fn(),
+		"tab:setTranslating": vi.fn(),
 		"cache:status": vi.fn(),
 		"cache:enable": vi.fn(),
 		"cache:disable": vi.fn(),

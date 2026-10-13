@@ -9,7 +9,7 @@ import type { Browser } from "wxt/browser";
 // sw.evaluate に渡す関数は service worker 内で実行されるので、そこにある chrome を参照する
 declare const chrome: typeof Browser;
 
-export type ResponsesRequest = {
+type ResponsesRequest = {
 	instructions: string;
 	store: boolean;
 	stream: boolean;
@@ -32,6 +32,7 @@ export const TEST_PAGE = `<!doctype html><html lang="en"><head><title>Test page<
 <div style="height:3000px"></div>
 <p id="far">This paragraph is far below the fold.</p>
 <div id="dynamic-root"></div>
+<div id="dynamic-excluded" class="notranslate"></div>
 </body></html>`;
 
 const screenshotDir = process.env["E2E_SCREENSHOT_DIR"];
@@ -69,6 +70,8 @@ export async function launchExtension() {
 				return await chrome.tabs.sendMessage(tab!.id!, msg);
 			}, message),
 		requests: () => sw.evaluate(() => (globalThis as MockedGlobal).__requests),
+		setSiteRules: (rules: Record<string, string[]>) =>
+			sw.evaluate((r) => chrome.storage.local.set({ siteRules: r }), rules),
 		setSettings: (settings: Record<string, unknown>) =>
 			sw.evaluate((s) => chrome.storage.sync.set({ settings: s }), settings),
 		openTestPage: async (url = "https://test.example/page") => {

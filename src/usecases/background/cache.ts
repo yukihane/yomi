@@ -4,6 +4,8 @@ import { protectAuthStorage } from "@/infra/storage/auth-access";
 import { cachePolicyItem } from "@/infra/storage/cache-policy";
 import { countTranslations, rotateCache } from "@/infra/storage/translation-cache";
 
+import { stopRememberedTranslations } from "./tab-state";
+
 let epoch: string | null = null;
 let ready: Promise<void> | null = null;
 let operations: Promise<unknown> = Promise.resolve();
@@ -51,6 +53,7 @@ export async function cacheSession(signal: AbortSignal, incognito: boolean) {
 async function changeCache(enabled?: boolean): Promise<void> {
 	const resume = pauseTranslations();
 	const operation = async () => {
+		await stopRememberedTranslations();
 		await stopAllPageTranslations();
 		await initializeCache().catch(() => {});
 		await protectAuthStorage();

@@ -3,12 +3,13 @@ import { Show } from "solid-js";
 import { callBackground } from "@/infra/messaging/background-client";
 
 import "@/ui/base.css";
-import { PlanStatus } from "@/ui/components/PlanStatus";
+import { AccountStatus } from "@/ui/components/AccountStatus";
 import { SignInCard } from "@/ui/components/SignInCard";
 import { TranslationSettingsFields } from "@/ui/components/TranslationSettingsFields";
 import { createActivePage } from "@/ui/hooks/active-page";
 import { createAuth } from "@/ui/hooks/auth";
 import { createSettings } from "@/ui/hooks/settings";
+import { createSiteRules } from "@/ui/hooks/site-rules";
 
 import { PageControls } from "./PageControls";
 import { ShortcutHints } from "./ShortcutHints";
@@ -19,6 +20,7 @@ export function App() {
 	const auth = createAuth();
 	const [settings, update] = createSettings();
 	const [page, sendToPage] = createActivePage();
+	const [siteRules, updateSiteRules, siteRulesError] = createSiteRules();
 
 	return (
 		<Show when={auth() && settings()} fallback={<div class="popup" />}>
@@ -32,24 +34,24 @@ export function App() {
 
 				<Show when={auth()!.signedIn} fallback={<SignInCard />}>
 					<section class="account">
-						<PlanStatus />
+						<AccountStatus email={auth()!.email} />
 					</section>
-				</Show>
-
-				<Show when={auth()!.signedIn && settings()!.model == null}>
-					<div class="notice">
-						翻訳に使うモデルが未選択です。
-						<button class="btn link" onClick={() => void callBackground("open:options")}>
-							設定で選択
-						</button>
-					</div>
 				</Show>
 
 				<PageControls
 					page={page()}
 					send={sendToPage}
-					disabled={!auth()!.signedIn || settings()!.model == null}
+					disabled={!auth()!.signedIn}
+					alwaysTranslate={(host) => siteRules()?.alwaysTranslate.includes(host) ?? false}
+					setAlwaysTranslate={(host, enabled) => updateSiteRules({ type: "always", host, enabled })}
 				/>
+				<Show when={siteRulesError()}>
+					{(error) => (
+						<p role="alert" class="error-text">
+							{error()}
+						</p>
+					)}
+				</Show>
 
 				<section class="settings">
 					<TranslationSettingsFields

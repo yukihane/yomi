@@ -7,11 +7,27 @@ export interface Overlay {
 	hideSelectionButton(): void;
 	readonly selectionButtonShown: boolean;
 	openPanel(anchor: DOMRect, title: string, onClose: () => void): TranslationPanel;
+	showOffer(offer: OfferOptions): void;
+	hideOffer(): void;
+}
+
+interface OverlayAction {
+	label: string;
+	onClick: () => void;
 }
 
 export interface ToastOptions {
 	error?: boolean;
-	action?: { label: string; onClick: () => void };
+	action?: OverlayAction;
+}
+
+/** 操作を選ぶか閉じるまで出し続ける。先頭の操作を主操作として強調する */
+export interface OfferOptions {
+	message: string;
+	actions: OverlayAction[];
+	menu: OverlayAction[];
+	/** 操作を選ばずに ✕ やカードの外のクリックで閉じたときだけ呼ぶ */
+	onDismiss: () => void;
 }
 
 export type PanelState =

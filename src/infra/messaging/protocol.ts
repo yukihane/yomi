@@ -4,6 +4,8 @@ import { SerializedFailureSchema } from "@/domain/failure";
 import type { MessageAudience } from "@/domain/message-caller";
 import { ModelInfoSchema } from "@/domain/models";
 import { SignOutResultSchema } from "@/domain/sign-out";
+import { SiteRulesSchema, SiteRuleChangeSchema, OfferExclusionSchema } from "@/domain/site-rules";
+import { PageOfferStateSchema, TranslatingSchema } from "@/domain/tab-state";
 import { CacheStatusSchema } from "@/domain/translation-cache";
 import { TranslationOutputSchema } from "@/domain/translation-request";
 
@@ -38,6 +40,12 @@ const endpoint = <P extends v.GenericSchema, R extends v.GenericSchema>(
 });
 
 export const BACKGROUND_API = {
+	"siteRules:get": endpoint(v.void(), SiteRulesSchema, "extension"),
+	"siteRules:change": endpoint(SiteRuleChangeSchema, SiteRulesSchema, "extension"),
+	"offer:getState": endpoint(v.void(), PageOfferStateSchema, "content"),
+	"offer:exclude": endpoint(OfferExclusionSchema, v.void(), "content"),
+	"offer:dismiss": endpoint(v.void(), v.void(), "content"),
+	"tab:setTranslating": endpoint(TranslatingSchema, v.void(), "content"),
 	"cache:status": endpoint(v.void(), CacheStatusSchema, "extension"),
 	"cache:enable": endpoint(v.void(), v.void(), "extension"),
 	"cache:disable": endpoint(v.void(), v.void(), "extension"),
