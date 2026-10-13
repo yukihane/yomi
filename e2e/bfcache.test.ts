@@ -100,6 +100,12 @@ test.each(["未翻訳", "翻訳済み", "停止", "サインアウト", "別オ�
 			await expect
 				.poll(() => page.textContent("#added"))
 				.toBe(continuing ? translated("Added after restoration.") : "Added after restoration.");
+			await page.locator("#added").evaluate((paragraph) => {
+				paragraph.textContent = "Changed after restoration.";
+			});
+			await expect
+				.poll(() => page.textContent("#added"))
+				.toBe(continuing ? translated("Changed after restoration.") : "Changed after restoration.");
 		} finally {
 			await ext.context.close();
 			await new Promise<void>((resolve, reject) => {
