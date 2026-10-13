@@ -108,8 +108,13 @@ export class PageTranslator {
 	}
 
 	stop() {
-		this.revision++;
 		this.hooks.onActiveChange(false);
+		this.suspend();
+	}
+
+	// ページ離脱はユーザーの停止操作ではないため、タブの継続設定を変更しない。
+	suspend() {
+		this.revision++;
 		if (!this.active) return;
 		this.active = false;
 		this.watcher.stop();

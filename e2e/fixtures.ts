@@ -47,7 +47,7 @@ export async function screenshot(page: Page, name: string, options?: { fullPage?
 
 export type Extension = Awaited<ReturnType<typeof launchExtension>>;
 
-export async function launchExtension() {
+export async function launchExtension(options: { bfcache?: boolean } = {}) {
 	const executablePath = process.env["CHROMIUM_PATH"];
 	if (executablePath == null || executablePath === "")
 		throw new Error("CHROMIUM_PATH を指定してください");
@@ -56,6 +56,7 @@ export async function launchExtension() {
 	const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "yomi-e2e-")), {
 		executablePath,
 		headless: true,
+		ignoreDefaultArgs: options.bfcache === true ? ["--disable-back-forward-cache"] : [],
 		args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
 		viewport: { width: 1000, height: 800 },
 	});

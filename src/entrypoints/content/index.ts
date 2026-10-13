@@ -50,6 +50,14 @@ export default defineContentScript({
 				sendResponse(runCommand(message));
 			},
 		);
-		void offerPageTranslation({ overlay, page, getSettings: () => settings });
+		const offer = () => offerPageTranslation({ overlay, page, getSettings: () => settings });
+		ctx.addEventListener(window, "pagehide", () => {
+			page.suspend();
+			overlay.hideOffer();
+		});
+		ctx.addEventListener(window, "pageshow", (event) => {
+			if (event.persisted) void offer();
+		});
+		void offer();
 	},
 });
