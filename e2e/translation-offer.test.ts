@@ -28,6 +28,7 @@ async function followLink(page: Page, url: string) {
 // 提案カードは closed shadow DOM なので、操作は座標で行い表示はスクリーンショットで確認する
 test("翻訳先と違う言語のページで提案し、「翻訳する」で翻訳を始める", async () => {
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	await screenshot(page, "translation-offer");
 
 	const width = await page.evaluate(() => document.documentElement.clientWidth);
@@ -40,6 +41,7 @@ test("翻訳先と違う言語のページで提案し、「翻訳する」で�
 
 test("カードの外をクリックすると提案を閉じる", async () => {
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	const width = await page.evaluate(() => document.documentElement.clientWidth);
 
 	await page.mouse.click(100, 400);
@@ -52,6 +54,7 @@ test("カードの外をクリックすると提案を閉じる", async () => {
 
 test("提案を閉じたタブでは、ページを移っても提案しない", async () => {
 	const page = await ext.openTestPage("https://test.example/first");
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	await page.mouse.click(100, 400);
 	await page.goto("https://test.example/second");
 
@@ -64,6 +67,7 @@ test("提案を閉じたタブでは、ページを移っても提案しない",
 
 test("提案を閉じたタブでも、リロードすれば再び提案する", async () => {
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	await page.mouse.click(100, 400);
 	await page.reload();
 
@@ -99,6 +103,7 @@ test("翻訳したタブでも、アドレスバーから移った先は翻訳�
 
 test("翻訳したタブでもリロードすれば翻訳せずに提案する", async () => {
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	await ext.sendToTab({ type: "page:translate" });
 	await expect.poll(() => page.textContent("#h1"), { timeout: 10_000 }).toMatch(/^JA:/u);
 
@@ -123,6 +128,7 @@ test("翻訳を止めたタブでは、ページを移っても翻訳しない",
 test("常に翻訳するサイトは開いただけで翻訳する", async () => {
 	await ext.setSiteRules({ alwaysTranslate: ["test.example"] });
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 
 	await expect.poll(() => page.textContent("#h1"), { timeout: 10_000 }).toMatch(/^JA:/u);
 	await page.close();
@@ -147,6 +153,7 @@ test.each([
 	],
 ])("翻訳中のタブで SPA が%s遷移をしても、移った先を翻訳する", async (_, navigate) => {
 	const page = await ext.openTestPage();
+	await expect.poll(() => hasOverlay(page)).toBe(true);
 	await ext.sendToTab({ type: "page:translate" });
 	await expect.poll(() => page.textContent("#h1"), { timeout: 10_000 }).toMatch(/^JA:/u);
 

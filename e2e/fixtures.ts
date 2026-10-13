@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 
 import { chromium } from "playwright-core";
 import type { Page } from "playwright-core";
-import { expect } from "vitest";
+import { vi } from "vitest";
 import type { Browser } from "wxt/browser";
 
 // sw.evaluate に渡す関数は service worker 内で実行されるので、そこにある chrome を参照する
@@ -60,6 +60,16 @@ export async function launchExtension() {
 		viewport: { width: 1000, height: 800 },
 	});
 	const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
+	// beforeAll からも使うため、テスト内専用の expect.poll は使えない。
+	await vi.waitFor(
+		async () => {
+			const ready = await sw.evaluate(
+				() => chrome.runtime.onMessage.hasListeners() && chrome.tabs.onUpdated.hasListeners(),
+			);
+			if (!ready) throw new Error("拡張機能の初期化を待っています");
+		},
+		{ timeout: 10000 },
+	);
 	await sw.evaluate(installMocks);
 
 	return {
@@ -81,18 +91,20 @@ export async function launchExtension() {
 				route.fulfill({ contentType: "text/html", body: TEST_PAGE }),
 			);
 			await page.goto(url);
-			await expect
-				.poll(() =>
-					sw.evaluate(async () => {
+			await vi.waitFor(
+				async () => {
+					const ready = await sw.evaluate(async () => {
 						const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 						if (tab?.id == null) return false;
 						return await chrome.tabs.sendMessage(tab.id, { type: "page:getState" }).then(
 							() => true,
 							() => false,
 						);
-					}),
-				)
-				.toBe(true);
+					});
+					if (!ready) throw new Error("ページ側の初期化を待っています");
+				},
+				{ timeout: 10000 },
+			);
 			return page;
 		},
 	};
