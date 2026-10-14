@@ -1,4 +1,4 @@
-export type ResponsesRequest = {
+type ResponsesRequest = {
 	store: boolean;
 	stream: boolean;
 	reasoning?: { effort: string };
