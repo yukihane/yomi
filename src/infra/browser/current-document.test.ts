@@ -44,3 +44,18 @@ it.each([
 	vi.spyOn(navigation, "getFrame").mockResolvedValue(value);
 	await expect(currentDocument(caller)).rejects.toThrow("翻訳元の文書を確認できません");
 });
+
+it("Firefox は現在のトップフレームを取得して文書IDを照合する", async () => {
+	vi.stubEnv("BROWSER", "firefox");
+	const getFrame = vi
+		.spyOn(navigation, "getFrame")
+		.mockResolvedValue({ ...frame, documentLifecycle: undefined });
+	try {
+		await expect(currentDocument(caller)).resolves.toEqual({ ...caller, url: frame.url });
+		expect(getFrame).toHaveBeenCalledWith({ tabId: 1, frameId: 0 });
+		getFrame.mockResolvedValue({ ...frame, documentLifecycle: undefined, documentId: "old" });
+		await expect(currentDocument(caller)).rejects.toThrow(/文書|操作/u);
+	} finally {
+		vi.unstubAllEnvs();
+	}
+});

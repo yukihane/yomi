@@ -6,6 +6,9 @@ import { TranslateFailure } from "@/domain/failure";
 import { TRANSLATE_PORT, TranslateEventSchema } from "@/infra/messaging/protocol";
 import type { TranslateRequest } from "@/infra/messaging/protocol";
 
+// 接続が開いているだけではバックグラウンドの停止を防げない。
+const KEEP_ALIVE_INTERVAL_MS = 20_000;
+
 export interface StreamHandle {
 	done: Promise<void>;
 	cancel: () => void;
@@ -34,9 +37,11 @@ export function requestTranslation(
 	}
 
 	let finished = false;
+	let keepAlive: ReturnType<typeof setInterval> | undefined;
 	const finish = (settle: () => void) => {
 		if (finished) return;
 		finished = true;
+		clearInterval(keepAlive);
 		port.disconnect();
 		settle();
 	};
@@ -66,7 +71,18 @@ export function requestTranslation(
 	port.onDisconnect.addListener(() => {
 		finish(() => reject(new TranslateFailure("other", "拡張機能との接続が切れました")));
 	});
-	port.postMessage(req);
+	try {
+		port.postMessage(req);
+		keepAlive = setInterval(() => {
+			try {
+				port.postMessage({ type: "ping" });
+			} catch {
+				finish(() => reject(new TranslateFailure("other", "拡張機能との接続が切れました")));
+			}
+		}, KEEP_ALIVE_INTERVAL_MS);
+	} catch {
+		finish(() => reject(new TranslateFailure("other", "拡張機能との接続が切れました")));
+	}
 
 	return { done, cancel: () => finish(() => reject(new StreamCancelled())) };
 }

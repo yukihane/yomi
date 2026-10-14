@@ -10,6 +10,7 @@ import {
 	REQUEST_TIMEOUT_MS,
 	IDLE_PORT_TIMEOUT_MS,
 } from "@/domain/translation-limits";
+import { TranslatePingSchema } from "@/domain/translation-ping";
 import type { TranslationOutput } from "@/domain/translation-request";
 
 import { getMessageCaller } from "./caller";
@@ -27,9 +28,6 @@ import type {
 	TranslateEvent,
 	TranslateRequest,
 } from "./protocol";
-
-/** fetch のストリーム受信だけでは service worker の idle タイマーが延長されないため、拡張 API を定期的に呼ぶ */
-const KEEP_ALIVE_INTERVAL_MS = 20_000;
 
 export type BackgroundHandlers = {
 	[K in BackgroundMethod]: (params: ParamsOf<K>, caller: MessageCaller) => Promise<ResultOf<K>>;
@@ -106,7 +104,6 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 		const controller = new AbortController();
 		let started = false;
 		let closed = false;
-		let keepAlive: ReturnType<typeof setInterval> | undefined;
 		const post = (event: TranslateEvent) => {
 			if (!closed) port.postMessage(event);
 		};
@@ -116,7 +113,6 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 			controller.abort();
 			release();
 			clearTimeout(timer);
-			clearInterval(keepAlive);
 			browser.webNavigation.onCommitted.removeListener(onNavigation);
 			browser.webNavigation.onHistoryStateUpdated.removeListener(onNavigation);
 			port.disconnect();
@@ -139,6 +135,7 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 		browser.webNavigation.onHistoryStateUpdated.addListener(onNavigation);
 		port.onDisconnect.addListener(close);
 		port.onMessage.addListener((raw: unknown) => {
+			if (!closed && v.is(TranslatePingSchema, raw)) return;
 			if (started || closed) {
 				close();
 				return;
@@ -146,7 +143,6 @@ export function serveTranslatePort(translate: TranslateHandler, toFailure: ToFai
 			started = true;
 			clearTimeout(timer);
 			timer = setTimeout(expire, REQUEST_TIMEOUT_MS);
-			keepAlive = setInterval(() => void browser.runtime.getPlatformInfo(), KEEP_ALIVE_INTERVAL_MS);
 			const run = async () => {
 				const parsed = v.safeParse(TranslateRequestSchema, raw);
 				if (!parsed.success) {

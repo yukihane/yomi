@@ -3,11 +3,24 @@ import { defineConfig } from "wxt";
 
 export default defineConfig({
 	srcDir: "src",
+	manifestVersion: 3,
 	vite: () => ({ plugins: [solid()] }),
-	manifest: {
+	manifest: ({ browser }) => ({
 		name: "Yomi",
 		description: "ChatGPT サブスクリプションで Web ページ全体や選択テキストを翻訳します。",
-		minimum_chrome_version: "140",
+		...(browser === "firefox"
+			? {
+					browser_specific_settings: {
+						gecko: {
+							id: "yomi@shun-shobon",
+							strict_min_version: "153.0",
+							data_collection_permissions: {
+								required: ["websiteContent", "authenticationInfo", "personallyIdentifyingInfo"],
+							},
+						},
+					},
+				}
+			: { minimum_chrome_version: "140" }),
 		permissions: ["storage", "contextMenus", "webNavigation"],
 		host_permissions: [
 			"https://auth.openai.com/*",
@@ -25,5 +38,5 @@ export default defineConfig({
 				description: "原文と訳文を切り替え",
 			},
 		},
-	},
+	}),
 });

@@ -3,6 +3,8 @@ import * as v from "valibot";
 import { storage } from "#imports";
 import type { StorageItemKey } from "#imports";
 
+import { privateLocalItem } from "./private-local";
+
 export interface StorageItem<T> {
 	readonly fallback: T;
 	getValue(): Promise<T>;
@@ -16,7 +18,10 @@ export function defineValidatedItem<TSchema extends v.GenericSchema>(
 	schema: TSchema,
 	fallback: v.InferOutput<TSchema>,
 ): StorageItem<v.InferOutput<TSchema>> {
-	const item = storage.defineItem<unknown>(key);
+	const item =
+		import.meta.env.BROWSER === "firefox" && key.startsWith("local:")
+			? privateLocalItem(key.slice("local:".length))
+			: storage.defineItem<unknown>(key);
 	const parse = (raw: unknown): v.InferOutput<TSchema> => {
 		const result = v.safeParse(schema, raw);
 		return result.success ? result.output : fallback;

@@ -57,3 +57,21 @@ it.each(["other.html", "options.html/extra", "popup.html.other"])(
 		);
 	},
 );
+
+const firefoxRoot = "moz-extension://test-uuid/";
+it("Firefox は文書IDとoriginを検証し、省略された lifecycle を許可する", () => {
+	expect(
+		parseMessageCaller({ ...sender, documentLifecycle: undefined }, id, firefoxRoot),
+	).toMatchObject({ documentId: "document-1", origin: sender.origin });
+});
+it.each([
+	{ documentId: undefined },
+	{ origin: undefined },
+	{ origin: "null" },
+	{ frameId: 1 },
+	{ documentLifecycle: "cached" },
+])("Firefox でも不正な送信元 %o を拒否する", (patch) => {
+	expect(() =>
+		parseMessageCaller({ ...sender, documentLifecycle: undefined, ...patch }, id, firefoxRoot),
+	).toThrow(/文書|操作/u);
+});
