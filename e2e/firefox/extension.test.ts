@@ -44,7 +44,7 @@ test("Firefox 用 manifest が文書検証に必要なバージョンと権限�
 		manifest_version: 3,
 		permissions: expect.arrayContaining(["storage", "contextMenus", "webNavigation"]),
 		browser_specific_settings: { gecko: { strict_min_version: "153.0" } },
-		background: { scripts: expect.arrayContaining(["background.js"]) },
+		background: { scripts: expect.arrayContaining([expect.stringMatching(/\/background\.js$/u)]) },
 	});
 });
 

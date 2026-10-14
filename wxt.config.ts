@@ -4,6 +4,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
 	srcDir: "src",
 	manifestVersion: 3,
+	zip: { excludeSources: ["tmp/**", "docs/tmp/**"] },
 	vite: () => ({ plugins: [solid()] }),
 	manifest: ({ browser }) => ({
 		name: "Yomi",
