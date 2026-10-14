@@ -12,6 +12,10 @@ export async function openUsagePage(): Promise<void> {
 }
 
 export async function openShortcutsPage(): Promise<void> {
+	if (import.meta.env.BROWSER === "firefox") {
+		await browser.commands.openShortcutSettings();
+		return;
+	}
 	await browser.tabs.create({ url: SHORTCUTS_URL });
 }
 

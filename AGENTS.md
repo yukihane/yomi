@@ -1,6 +1,6 @@
 # AGENTS.md
 
-WXT + Solid + TypeScript の Chrome 拡張。機能は README を参照する。
+WXT + Solid + TypeScript の Chrome・Firefox 拡張。機能は README を参照する。
 
 ## 開発
 
@@ -12,6 +12,9 @@ mise install
 pnpm install
 pnpm dev        # 拡張を読み込んだ Chrome が起動する
 pnpm build      # .output/chrome-mv3 に出力
+pnpm build:firefox # .output/firefox-mv3 に出力
+pnpm dev:firefox # Firefox 向け開発
+pnpm zip:firefox # Firefox 向け配布用 zip を作成
 pnpm typecheck
 pnpm test       # vitest
 pnpm lint       # oxlint（type-aware）。レイヤーの依存方向も検査する
@@ -93,6 +96,18 @@ CHROMIUM_PATH="$(node -p "require('playwright-core').chromium.executablePath()")
 ```
 
 `E2E_SCREENSHOT_DIR` に出力先を指定すると、選択テキスト翻訳やポップアップなど目視で確認する画面のスクリーンショットを保存する。
+
+### Firefox の E2E
+
+Firefox 153 以降を対象に Selenium と実 Firefox で実行する。API モックは一時コピーの background page に差し込む。設定と翻訳だけでなく、提案・自動翻訳・継続翻訳・SPA 遷移も検証する。
+
+```sh
+pnpm build:firefox
+FIREFOX_PATH="$(node scripts/install-firefox.ts stable_153.0)" pnpm test:e2e:firefox
+FIREFOX_PATH="$(node scripts/install-firefox.ts stable_156.0.1)" pnpm test:e2e:firefox
+```
+
+Chrome と Firefox の E2E はそれぞれ `pnpm test:e2e` と `pnpm test:e2e:firefox` で分けて実行する。CI でも両方を実行する。
 
 ## UI デザイン
 

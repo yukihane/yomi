@@ -1,18 +1,18 @@
 import * as v from "valibot";
 
 import { browser } from "#imports";
-import { CurrentDocumentSchema } from "@/domain/current-document";
+import { CurrentDocumentSchema, FirefoxCurrentDocumentSchema } from "@/domain/current-document";
 import { TranslateFailure } from "@/domain/failure";
 import type { MessageCaller } from "@/domain/message-caller";
 
 export async function currentDocument(caller: Extract<MessageCaller, { kind: "content" }>) {
 	try {
 		const frame = v.parse(
-			CurrentDocumentSchema,
+			import.meta.env.BROWSER === "firefox" ? FirefoxCurrentDocumentSchema : CurrentDocumentSchema,
 			await browser.webNavigation.getFrame({
 				tabId: caller.tabId,
 				frameId: 0,
-				documentId: caller.documentId,
+				...(import.meta.env.BROWSER === "firefox" ? {} : { documentId: caller.documentId }),
 			}),
 		);
 		const url = new URL(frame.url);

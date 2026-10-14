@@ -72,6 +72,14 @@ jobs:
           mode: draft
 
   extension:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chrome
+            zip: zip
+          - browser: firefox
+            zip: zip:firefox
     needs: draft
     if: needs.draft.outputs.ready == 'true'
     runs-on: ubuntu-latest
@@ -88,14 +96,15 @@ jobs:
         uses: $/.github/actions/setup
 
       - name: Build | Extension Zip
-        run: pnpm run zip
+        run: pnpm run ${{ matrix.zip }}
 
       - name: Run | Upload Extension Zip
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.draft.outputs.tag }}
-        run: gh release upload "$RELEASE_TAG" .output/*-chrome.zip --clobber
+          BROWSER: ${{ matrix.browser }}
+        run: gh release upload "$RELEASE_TAG" .output/*-"$BROWSER".zip --clobber
 
   release:
     needs: [draft, extension]

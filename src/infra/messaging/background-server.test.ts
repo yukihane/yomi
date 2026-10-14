@@ -259,7 +259,7 @@ it("未送信ポートも枠を占有し、切断と期限切れで枠とタイ�
 	expect(vi.getTimerCount()).toBe(0);
 	expect(translate).not.toHaveBeenCalled();
 });
-it("応答が終わらない要求も120秒で中断し、枠を返す", async () => {
+it("ping で翻訳を重複させず、120秒の期限も延長しない", async () => {
 	vi.useFakeTimers();
 	const pending = Promise.withResolvers<void>();
 	const translate = vi.fn<TranslateHandler>().mockReturnValue(pending.promise);
@@ -279,7 +279,11 @@ it("応答が終わらない要求も120秒で中断し、枠を返す", async (
 		postMessage,
 	} as unknown as Browser.runtime.Port);
 	message.mock.calls[0]![0]({ kind: "selection", targetLang: "ja", text: "Hello" });
-	await vi.advanceTimersByTimeAsync(120000);
+	await vi.advanceTimersByTimeAsync(20_000);
+	message.mock.calls[0]![0]({ type: "ping" });
+	expect(translate).toHaveBeenCalledOnce();
+	expect(disconnect).not.toHaveBeenCalled();
+	await vi.advanceTimersByTimeAsync(100_000);
 	expect(translate.mock.calls[0]![1].aborted).toBe(true);
 	expect(disconnect).toHaveBeenCalledOnce();
 	expect(vi.getTimerCount()).toBe(0);

@@ -77,6 +77,22 @@ jobs:
         run: pnpm run test
 
   e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chrome
+            version: chromium
+            build: build
+            test: test:e2e
+          - browser: firefox
+            version: stable_153.0
+            build: build:firefox
+            test: test:e2e:firefox
+          - browser: firefox
+            version: stable_156.0.1
+            build: build:firefox
+            test: test:e2e:firefox
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -86,22 +102,35 @@ jobs:
       - name: Setup | Development environment
         uses: $/.github/actions/setup
 
+      - name: Setup | Chromium
+        if: matrix.browser == 'chrome'
+        run: |
+          pnpm exec playwright-core install --with-deps --no-shell chromium
+          echo "CHROMIUM_PATH=$(node -p "require('playwright-core').chromium.executablePath()")" >> "$GITHUB_ENV"
+
+      - name: Setup | Firefox
+        if: matrix.browser == 'firefox'
+        env:
+          FIREFOX_BUILD: ${{ matrix.version }}
+        run: |
+          pnpm exec playwright-core install-deps firefox
+          echo "FIREFOX_PATH=$(node scripts/install-firefox.ts "$FIREFOX_BUILD")" >> "$GITHUB_ENV"
+
       - name: Build | Extension
-        run: pnpm run build
+        run: pnpm run ${{ matrix.build }}
 
       - name: Run | E2E
         env:
-          CHROMIUM_PATH: /usr/bin/chromium
           E2E_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
         run: |
           mkdir -p "$E2E_SCREENSHOT_DIR"
-          pnpm run test:e2e
+          pnpm run ${{ matrix.test }}
 
       - name: Upload | Screenshots
         if: ${{ always() }}
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.browser }}-${{ matrix.version }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: ignore
 

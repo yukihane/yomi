@@ -60,7 +60,14 @@ export function parseMessageCaller(
 		if (url.pathname === "/options.html") return { kind: "extension", page: "options" };
 		throw denied();
 	}
-	const content = v.safeParse(ContentSenderSchema, raw);
+	const schema =
+		extension.protocol === "moz-extension:"
+			? v.object({
+					...ContentSenderSchema.entries,
+					documentLifecycle: v.optional(v.literal("active")),
+				})
+			: ContentSenderSchema;
+	const content = v.safeParse(schema, raw);
 	if (
 		!content.success ||
 		!["http:", "https:"].includes(url.protocol) ||
