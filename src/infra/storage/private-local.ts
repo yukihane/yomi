@@ -41,6 +41,8 @@ export async function migratePrivateStorage() {
 		await tx.store.put(true, "__migrated");
 	}
 	await tx.done;
+	// コミット前に旧コピーを消すと、書き込み失敗時に認証情報や設定を失う。
+	await browser.storage.local.remove(keys);
 }
 
 // Firefox の storage.local は content script からの読み書きを禁止できない。
