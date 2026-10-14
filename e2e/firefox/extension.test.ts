@@ -37,6 +37,17 @@ function text(page: FirefoxPage, selector: string) {
 	);
 }
 
+test("Firefox 用 manifest が文書検証に必要なバージョンと権限を宣言する", async () => {
+	expect(
+		await extension.evaluate(extension.control, () => browser.runtime.getManifest()),
+	).toMatchObject({
+		manifest_version: 3,
+		permissions: expect.arrayContaining(["storage", "contextMenus", "webNavigation"]),
+		browser_specific_settings: { gecko: { strict_min_version: "153.0" } },
+		background: { scripts: expect.arrayContaining(["background.js"]) },
+	});
+});
+
 test("設定とポップアップを表示し、モデルの変更を保存する", async () => {
 	const options = extension.control;
 	await expect.poll(() => text(options, "select")).toContain("GPT-6 Luna");
