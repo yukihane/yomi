@@ -41,6 +41,7 @@
 		"@shun-shobon/oxlint-config": "7.0.0",
 		"@tsconfig/strictest": "2.0.8",
 		"@types/selenium-webdriver": "4.35.7",
+		"fake-indexeddb": "6.2.5",
 		"happy-dom": "20.14.5",
 		"knip": "6.40.0",
 		"oxfmt": "0.72.0",

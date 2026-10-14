@@ -1,5 +1,6 @@
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
+import * as v from "valibot";
 
 import { browser } from "#imports";
 
@@ -26,12 +27,18 @@ function openPrivateStorage() {
 export async function migratePrivateStorage() {
 	const db = await openPrivateStorage();
 	const keys = ["credentials", "clientId", "extAgentHostId", "siteRules", "cachePolicy"];
-	const previous = await browser.storage.local.get(keys);
+	const previous = v.parse(
+		v.record(v.string(), v.unknown()),
+		await browser.storage.local.get(keys),
+	);
 	const tx = db.transaction("items", "readwrite");
-	for (const key of keys) {
-		if ((await tx.store.getKey(key)) === undefined && Object.hasOwn(previous, key)) {
-			await tx.store.put(previous[key], key);
+	if ((await tx.store.get("__migrated")) !== true) {
+		for (const key of keys) {
+			if ((await tx.store.getKey(key)) === undefined && previous[key] !== undefined) {
+				await tx.store.put(previous[key], key);
+			}
 		}
+		await tx.store.put(true, "__migrated");
 	}
 	await tx.done;
 }

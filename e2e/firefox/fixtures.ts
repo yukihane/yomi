@@ -15,11 +15,13 @@ import type { Browser } from "wxt/browser";
 import { TEST_PAGE } from "../fixtures";
 import { installApiMock } from "../mock-api";
 import type { MockedGlobal } from "../mock-api";
+import { installSecurityProbe } from "./security-probe";
 
 declare const browser: typeof Browser;
 
 const ManifestSchema = v.looseObject({
 	background: v.looseObject({ scripts: v.array(v.string()) }),
+	content_scripts: v.array(v.looseObject({ js: v.array(v.string()) })),
 });
 
 export interface FirefoxPage {
@@ -64,7 +66,9 @@ export async function launchFirefoxExtension() {
 		const manifestPath = join(copy.path, "manifest.json");
 		const manifest = v.parse(ManifestSchema, JSON.parse(await readFile(manifestPath, "utf8")));
 		manifest.background.scripts.unshift("e2e-mock.js");
+		manifest.content_scripts[0]!.js.push("e2e-probe.js");
 		await writeFile(manifestPath, JSON.stringify(manifest));
+		await writeFile(join(copy.path, "e2e-probe.js"), `(${installSecurityProbe.toString()})();`);
 		await writeFile(join(copy.path, "e2e-mock.js"), `(${installApiMock.toString()})();`);
 
 		server.listen(0, "127.0.0.1");

@@ -288,3 +288,57 @@ test("サイト設定を別の設定画面にも反映し、自動翻訳する",
 		);
 	}
 });
+
+test("content script から認証情報を参照・上書きできず、要求上限も維持する", async () => {
+	const page = await openPage("/security");
+	const before = (await extension.stats()).requests.length;
+	expect(await extension.sendToTab(page, { type: "e2e:probe" })).toMatchObject({
+		localHasCredentials: false,
+		sessionReadable: false,
+		hasPrivateDatabase: false,
+		auth: { ok: false },
+		limit: { type: "error", failure: { kind: "request_limit" } },
+	});
+	expect((await extension.stats()).requests.length).toBe(before);
+	expect(
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({ type: "auth:getState" }),
+		),
+	).toMatchObject({
+		ok: true,
+		value: { signedIn: true, email: "tester@example.com" },
+	});
+	await extension.sendToTab(page, { type: "page:translate" });
+	await expect.poll(() => text(page, "#h1")).toMatch(/^JA:/u);
+});
+
+test("キャッシュ無効化で進行中の翻訳を中断し、サインアウトで資格情報を消去する", async () => {
+	const page = await openPage("/cache-disable");
+	await extension.configureMock({ delayMs: 35_000 });
+	const before = await extension.stats();
+	await extension.sendToTab(page, { type: "page:translate" });
+	await expect
+		.poll(async () => (await extension.stats()).requests.length)
+		.toBeGreaterThan(before.requests.length);
+	expect(
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({ type: "cache:disable" }),
+		),
+	).toMatchObject({ ok: true });
+	await expect.poll(async () => (await extension.stats()).aborted).toBeGreaterThan(before.aborted);
+	expect(
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({ type: "cache:status" }),
+		),
+	).toMatchObject({ ok: true, value: { enabled: false, count: 0 } });
+	expect(
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({ type: "auth:signOut" }),
+		),
+	).toMatchObject({ ok: true, value: { localCleared: true, cacheCleared: true } });
+	expect(
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({ type: "auth:getState" }),
+		),
+	).toMatchObject({ ok: true, value: { signedIn: false } });
+});
