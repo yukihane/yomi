@@ -193,7 +193,7 @@ export async function launchFirefoxExtension() {
 				const page = await newPage(`${origin}${path}`);
 				await expect
 					.poll(() => sendToTab(page, { type: "page:getState" }))
-					.toMatchObject({ active: false });
+					.toHaveProperty("active");
 				return page;
 			},
 			stats: () =>

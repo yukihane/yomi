@@ -219,3 +219,72 @@ test("通信エラー後に翻訳を再試行できる", async () => {
 		.poll(() => extension.sendToTab(page, { type: "page:getState" }))
 		.toMatchObject({ failed: 0, busy: 0 });
 });
+
+async function offerButton(page: FirefoxPage) {
+	await extension.driver.switchTo().window(page.handle);
+	const root = await extension.driver.findElement(By.css("yomi-ui")).getShadowRoot();
+	return await root.findElement(By.css(".offer button.primary"));
+}
+
+test("翻訳の提案・リンク先の継続翻訳・SPA・リロード時の解除が動作する", async () => {
+	const page = await openPage("/offer");
+	const before = (await extension.stats()).requests.length;
+	await expect.poll(() => offerButton(page)).toBeDefined();
+	expect((await extension.stats()).requests.length).toBe(before);
+	await (await offerButton(page)).click();
+	await expect.poll(() => text(page, "#h1")).toMatch(/^JA:/u);
+	const next = new URL("/continued", page.url).href;
+	await extension.evaluate(
+		page,
+		(url: string) => {
+			const link = document.createElement("a");
+			link.href = url;
+			document.body.append(link);
+			link.click();
+		},
+		next,
+	);
+	await expect.poll(() => extension.driver.getCurrentUrl()).toBe(next);
+	page.url = next;
+	await expect.poll(() => text(page, "#h1")).toMatch(/^JA:/u);
+	await extension.evaluate(page, () => {
+		history.pushState(null, "", "/spa");
+		const body = document.createElement("body");
+		body.innerHTML = '<h1 id="h1">New page heading</h1>';
+		document.body.replaceWith(body);
+	});
+	page.url = new URL("/spa", page.url).href;
+	await expect.poll(() => text(page, "#h1")).toBe("JA:NEW PAGE HEADING");
+	await extension.driver.navigate().refresh();
+	await expect.poll(() => offerButton(page)).toBeDefined();
+	expect(await extension.sendToTab(page, { type: "page:getState" })).toMatchObject({
+		active: false,
+	});
+});
+
+test("サイト設定を別の設定画面にも反映し、自動翻訳する", async () => {
+	const options = await extension.newPage("options.html");
+	pages.push(options);
+	const result = await extension.evaluate(extension.control, () =>
+		browser.runtime.sendMessage({
+			type: "siteRules:change",
+			params: { type: "always", host: "127.0.0.1", enabled: true },
+		}),
+	);
+	expect(result).toMatchObject({ ok: true });
+	try {
+		await expect.poll(() => text(options, "body")).toContain("127.0.0.1");
+		const page = await extension.newPage(
+			new URL("/auto", (await openPage("/auto-start")).url).href,
+		);
+		pages.push(page);
+		await expect.poll(() => text(page, "#h1")).toMatch(/^JA:/u);
+	} finally {
+		await extension.evaluate(extension.control, () =>
+			browser.runtime.sendMessage({
+				type: "siteRules:change",
+				params: { type: "always", host: "127.0.0.1", enabled: false },
+			}),
+		);
+	}
+});

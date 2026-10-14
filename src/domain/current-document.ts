@@ -11,4 +11,5 @@ export const CurrentDocumentSchema = v.object({
 export const FirefoxCurrentDocumentSchema = v.object({
 	...CurrentDocumentSchema.entries,
 	documentLifecycle: v.optional(v.literal("active")),
+	errorOccurred: v.optional(v.literal(false)),
 });
